@@ -6,7 +6,7 @@
 # À sourcer dans tous les scripts : source "$(dirname "$0")/version-config.sh"
 
 # Version du projet MKF
-export MKF_VERSION="2.3.0"
+export MKF_VERSION="2.3.1"
 
 # Fonction utilitaire pour récupérer la version
 get_mkf_version() {
