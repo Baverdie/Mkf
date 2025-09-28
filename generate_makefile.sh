@@ -1,4 +1,229 @@
-#!/bin/bash
+# ═══════════════════════════════════════════════════════════════
+# 🔄 SYSTÈME DE MISE À JOUR AUTOMATIQUE
+# ═══════════════════════════════════════════════════════════════
+
+# URLs pour les vérifications de version
+REPO_API_URL="https://api.github.com/repos/Baverdie/Mkf/releases/latest"
+REPO_RAW_URL="https://raw.githubusercontent.com/Baverdie/Mkf/main"
+UPDATE_CACHE_FILE="$CONFIG_DIR/update_cache"
+UPDATE_CONFIG_FILE="$CONFIG_DIR/update_config"
+
+# Vérifier si les mises à jour sont activées
+is_update_enabled() {
+    if [[ -f "$UPDATE_CONFIG_FILE" ]]; then
+        source "$UPDATE_CONFIG_FILE"
+        [[ "${AUTO_UPDATE_CHECK:-true}" == "true" ]]
+    else
+        true  # Activé par défaut
+    fi
+}
+
+# Obtenir la version actuelle
+get_current_version() {
+    echo "$VERSION"
+}
+
+# Obtenir la dernière version depuis GitHub
+get_latest_version() {
+    local latest_version=""
+    
+    # Essayer avec l'API GitHub d'abord
+    if command -v curl >/dev/null 2>&1; then
+        latest_version=$(curl -s "$REPO_API_URL" 2>/dev/null | grep '"tag_name"' | sed 's/.*"tag_name": *"v\?\([^"]*\)".*/\1/' 2>/dev/null)
+    fi
+    
+    # Fallback : chercher dans le script sur GitHub
+    if [[ -z "$latest_version" ]] && command -v curl >/dev/null 2>&1; then
+        latest_version=$(curl -s "$REPO_RAW_URL/generate_makefile.sh" 2>/dev/null | grep '^VERSION=' | head -1 | sed 's/VERSION="\([^"]*\)"/\1/' 2>/dev/null)
+    fi
+    
+    echo "$latest_version"
+}
+
+# Comparer les versions (retourne 0 si update disponible)
+version_compare() {
+    local current="$1"
+    local latest="$2"
+    
+    # Conversion en nombres pour comparaison
+    local current_num=$(echo "$current" | sed 's/[^0-9.]//g' | awk -F. '{print $1*10000 + $2*100 + $3}')
+    local latest_num=$(echo "$latest" | sed 's/[^0-9.]//g' | awk -F. '{print $1*10000 + $2*100 + $3}')
+    
+    [[ $latest_num -gt $current_num ]]
+}
+
+# Vérifier si on doit checker les mises à jour
+should_check_update() {
+    if ! is_update_enabled; then
+        return 1
+    fi
+    
+    if [[ ! -f "$UPDATE_CACHE_FILE" ]]; then
+        return 0  # Premier check
+    fi
+    
+    # Vérifier si le dernier check remonte à plus de 24h
+    local last_check=$(cat "$UPDATE_CACHE_FILE" 2>/dev/null | head -1)
+    local current_time=$(date +%s)
+    local time_diff=$((current_time - last_check))
+    
+    # 86400 = 24 heures en secondes
+    [[ $time_diff -gt 86400 ]]
+}
+
+# Sauvegarder les infos de cache
+save_update_cache() {
+    local latest_version="$1"
+    local current_time=$(date +%s)
+    
+    mkdir -p "$CONFIG_DIR"
+    cat > "$UPDATE_CACHE_FILE" << EOF
+$current_time
+$latest_version
+$(get_current_version)
+EOF
+}
+
+# Vérification des mises à jour (non-bloquante)
+check_for_updates() {
+    if ! should_check_update; then
+        return
+    fi
+    
+    local current_version=$(get_current_version)
+    local latest_version=$(get_latest_version)
+    
+    # Sauvegarder le cache même si pas de nouvelle version
+    save_update_cache "$latest_version"
+    
+    if [[ -n "$latest_version" ]] && version_compare "$current_version" "$latest_version"; then
+        # Nouvelle version disponible
+        cat > "$UPDATE_CACHE_FILE.available" << EOF
+$latest_version
+$(date +%s)
+EOF
+    else
+        # Supprimer le fichier de notification s'il existe
+        rm -f "$UPDATE_CACHE_FILE.available"
+    fi
+}
+
+# Afficher la notification de mise à jour (si nécessaire)
+show_update_notification() {
+    if [[ ! -f "$UPDATE_CACHE_FILE.available" ]] || ! is_update_enabled; then
+        return
+    fi
+    
+    local latest_version=$(head -1 "$UPDATE_CACHE_FILE.available" 2>/dev/null)
+    local current_version=$(get_current_version)
+    
+    if [[ -n "$latest_version" ]]; then
+        echo ""
+        echo -e "${YELLOW}${BOLD}📢 Mise à jour disponible !${NC}"
+        echo -e "  ${DIM}Version actuelle: ${NC}${BOLD}$current_version${NC}"
+        echo -e "  ${DIM}Nouvelle version: ${NC}${GREEN}${BOLD}$latest_version${NC}"
+        echo -e "  ${CYAN}Commande: ${NC}${YELLOW}mkf --update${NC} ${DIM}ou${NC} ${YELLOW}mkf-manager reinstall${NC}"
+        echo -e "  ${DIM}Désactiver: ${NC}${YELLOW}mkf --no-update-check${NC}"
+    fi
+}
+
+# Mise à jour automatique
+perform_update() {
+    echo -e "${BLUE}${BOLD}🔄 MISE À JOUR MKF${NC}"
+    echo ""
+    
+    local current_version=$(get_current_version)
+    local latest_version=$(get_latest_version)
+    
+    if [[ -z "$latest_version" ]]; then
+        log_error "Impossible de récupérer la version distante"
+        echo -e "${RED}Vérifiez votre connexion internet${NC}"
+        return 1
+    fi
+    
+    if ! version_compare "$current_version" "$latest_version"; then
+        log_success "Vous avez déjà la dernière version ($current_version)"
+        return 0
+    fi
+    
+    echo -e "  ${BOLD}Version actuelle:${NC} $current_version"
+    echo -e "  ${BOLD}Nouvelle version:${NC} ${GREEN}$latest_version${NC}"
+    echo ""
+    
+    read -p "$(echo -e "${CYAN}Continuer la mise à jour ? (Y/n): ${NC}")" -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]] && [[ -n $REPLY ]]; then
+        log_info "Mise à jour annulée"
+        return 0
+    fi
+    
+    echo ""
+    log_info "Téléchargement de la nouvelle version..."
+    
+    # Utiliser l'installateur pour la mise à jour
+    if command -v curl >/dev/null 2>&1; then
+        if curl -fsSL "https://raw.githubusercontent.com/Baverdie/Mkf/main/install.sh" | bash -s -- --force --silent; then
+            # Supprimer le cache de notification
+            rm -f "$UPDATE_CACHE_FILE.available"
+            
+            log_success "Mise à jour réussie vers la version $latest_version !"
+            echo ""
+            echo -e "${GREEN}🎉 MKF a été mis à jour avec succès !${NC}"
+            echo -e "${DIM}Redémarre ton terminal pour finaliser${NC}"
+        else
+            log_error "Échec de la mise à jour"
+            return 1
+        fi
+    else
+        log_error "curl requis pour la mise à jour automatique"
+        echo -e "${YELLOW}Installation manuelle:${NC}"
+        echo "  curl -fsSL https://raw.githubusercontent.com/Baverdie/Mkf/main/install.sh | bash"
+        return 1
+    fi
+}
+
+# Configuration des mises à jour
+configure_updates() {
+    local action="$1"
+    
+    mkdir -p "$CONFIG_DIR"
+    
+    case "$action" in
+        "disable")
+            echo 'AUTO_UPDATE_CHECK=false' > "$UPDATE_CONFIG_FILE"
+            log_success "Vérifications de mise à jour désactivées"
+            ;;
+        "enable")
+            echo 'AUTO_UPDATE_CHECK=true' > "$UPDATE_CONFIG_FILE"
+            log_success "Vérifications de mise à jour activées"
+            ;;
+        "status")
+            if is_update_enabled; then
+                echo -e "${GREEN}✅ Vérifications automatiques activées${NC}"
+            else
+                echo -e "${RED}❌ Vérifications automatiques désactivées${NC}"
+            fi
+            
+            if [[ -f "$UPDATE_CACHE_FILE" ]]; then
+                local last_check=$(head -1 "$UPDATE_CACHE_FILE" 2>/dev/null)
+                if [[ -n "$last_check" ]]; then
+                    local check_date=$(date -r "$last_check" 2>/dev/null || date -d "@$last_check" 2>/dev/null || echo "Inconnu")
+                    echo -e "${DIM}Dernière vérification: $check_date${NC}"
+                fi
+            fi
+            
+            if [[ -f "$UPDATE_CACHE_FILE.available" ]]; then
+                local available_version=$(head -1 "$UPDATE_CACHE_FILE.available" 2>/dev/null)
+                echo -e "${YELLOW}📢 Mise à jour disponible: $available_version${NC}"
+            else
+                echo -e "${GREEN}✅ Aucune mise à jour disponible${NC}"
+            fi
+            ;;
+        *)
+            echo "Usage: configure_updates [enable|disable|status]"
+            ;;
+    esac
+}#!/bin/bash
 
 # ┌─────────────────────────────────────────────────────────────┐
 # │  🚀 GÉNÉRATEUR DE MAKEFILE STYLÉ - ÉDITION PLUGINS 🚀      │
@@ -300,21 +525,25 @@ show_help() {
     echo "  mkf <nom_projet> [emoji] [fichiers_source...]"
     echo ""
     echo -e "${BLUE}${BOLD}OPTIONS:${NC}"
-    echo "  -i, --interactive    Mode interactif pour choisir l'emoji"
-    echo "  -u, --update         Mettre à jour un Makefile existant"
-    echo "  -g, --gitignore      Forcer la génération de .gitignore"
-    echo "  -c, --cmake          Générer un CMakeLists.txt au lieu d'un Makefile"
-    echo "  -w, --watch          Mode surveillance (regénération auto)"
-    echo "  --config             Ouvrir la configuration des plugins"
-    echo "  --analyze           Analyser un Makefile existant"
-    echo "  --plugins           Lister les plugins disponibles"
-    echo "  -v, --version        Afficher la version"
-    echo "  -h, --help           Afficher cette aide"
+    echo "  -i, --interactive       Mode interactif pour choisir l'emoji"
+    echo "  -u, --update           Mettre à jour MKF vers la dernière version"
+    echo "  -g, --gitignore        Forcer la génération de .gitignore"
+    echo "  -c, --cmake            Générer un CMakeLists.txt au lieu d'un Makefile"
+    echo "  -w, --watch            Mode surveillance (regénération auto)"
+    echo "  --config               Ouvrir la configuration des plugins"
+    echo "  --analyze              Analyser un Makefile existant"
+    echo "  --plugins              Lister les plugins disponibles"
+    echo "  --update-status        Afficher le statut des mises à jour"
+    echo "  --no-update-check      Désactiver les vérifications de MAJ"
+    echo "  --enable-update-check  Activer les vérifications de MAJ"
+    echo "  -v, --version          Afficher la version"
+    echo "  -h, --help             Afficher cette aide"
     echo ""
     echo -e "${BLUE}${BOLD}EXEMPLES:${NC}"
     echo -e "  ${YELLOW}mkf Serializer${NC}                    # Détection automatique complète"
     echo -e "  ${YELLOW}mkf MyProject 🚀${NC}                 # Avec emoji personnalisé"
     echo -e "  ${YELLOW}mkf -i Calculator${NC}                # Mode interactif"
+    echo -e "  ${YELLOW}mkf --update${NC}                     # Mettre à jour MKF"
     echo -e "  ${YELLOW}mkf --config${NC}                     # Configuration des plugins"
     echo ""
 }
@@ -706,9 +935,11 @@ EOF
 main() {
     load_config
     
+    # Vérification des mises à jour en arrière-plan (non-bloquant)
+    check_for_updates &
+    
     # Variables pour les options
     local interactive_mode=false
-    local update_mode=false
     local force_gitignore=false
     local cmake_mode=false
     local watch_mode=false
@@ -721,8 +952,8 @@ main() {
                 shift
                 ;;
             -u|--update)
-                update_mode=true
-                shift
+                perform_update
+                exit $?
                 ;;
             -g|--gitignore)
                 force_gitignore=true
@@ -746,6 +977,18 @@ main() {
                 ;;
             --plugins)
                 show_plugins_status
+                exit 0
+                ;;
+            --update-status)
+                configure_updates "status"
+                exit 0
+                ;;
+            --no-update-check)
+                configure_updates "disable"
+                exit 0
+                ;;
+            --enable-update-check)
+                configure_updates "enable"
                 exit 0
                 ;;
             -v|--version)
@@ -880,6 +1123,10 @@ EOF
     fi
     
     log_success "${FIRE} Projet prêt à décoller! ${FIRE}"
+    
+    # Notification de mise à jour si disponible
+    show_update_notification
+}
 }
 
 # Point d'entrée
