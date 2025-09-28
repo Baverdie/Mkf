@@ -35,7 +35,10 @@ if [[ "$EUID" -eq 0 ]]; then
     echo "Installation système détectée"
 else
     INSTALL_DIR="$HOME/bin"
-    mkdir -p "$INSTALL_DIR"
+    if ! mkdir -p "$INSTALL_DIR" 2>/dev/null; then
+        echo -e "${RED}Erreur: Impossible de créer le dossier $INSTALL_DIR${NC}"
+        exit 1
+    fi
     echo "Installation utilisateur: $INSTALL_DIR"
 fi
 
@@ -52,9 +55,15 @@ echo "Téléchargement du générateur..."
 
 # Téléchargement du générateur
 if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$SCRIPT_URL" -o "$TEMP_SCRIPT"
+    if ! curl -fsSL "$SCRIPT_URL" -o "$TEMP_SCRIPT"; then
+        echo -e "${RED}Erreur: Échec du téléchargement avec curl${NC}"
+        exit 1
+    fi
 elif command -v wget >/dev/null 2>&1; then
-    wget -q "$SCRIPT_URL" -O "$TEMP_SCRIPT"
+    if ! wget -q "$SCRIPT_URL" -O "$TEMP_SCRIPT"; then
+        echo -e "${RED}Erreur: Échec du téléchargement avec wget${NC}"
+        exit 1
+    fi
 else
     echo -e "${RED}Erreur: curl ou wget requis${NC}"
     exit 1
@@ -101,11 +110,23 @@ fi
 
 # Copie du générateur
 if [[ "$EUID" -eq 0 ]]; then
-    cp "$TEMP_SCRIPT" "$TARGET_SCRIPT"
-    chmod +x "$TARGET_SCRIPT"
+    if ! cp "$TEMP_SCRIPT" "$TARGET_SCRIPT"; then
+        echo -e "${RED}Erreur: Impossible de copier vers $TARGET_SCRIPT${NC}"
+        exit 1
+    fi
+    if ! chmod +x "$TARGET_SCRIPT"; then
+        echo -e "${RED}Erreur: Impossible de rendre exécutable $TARGET_SCRIPT${NC}"
+        exit 1
+    fi
 else
-    cp "$TEMP_SCRIPT" "$TARGET_SCRIPT"
-    chmod +x "$TARGET_SCRIPT"
+    if ! cp "$TEMP_SCRIPT" "$TARGET_SCRIPT"; then
+        echo -e "${RED}Erreur: Impossible de copier vers $TARGET_SCRIPT${NC}"
+        exit 1
+    fi
+    if ! chmod +x "$TARGET_SCRIPT"; then
+        echo -e "${RED}Erreur: Impossible de rendre exécutable $TARGET_SCRIPT${NC}"
+        exit 1
+    fi
 fi
 
 echo -e "${GREEN}✅ Générateur installé: $TARGET_SCRIPT${NC}"

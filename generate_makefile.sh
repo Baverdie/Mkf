@@ -1,3 +1,49 @@
+#!/bin/bash
+
+# ┌─────────────────────────────────────────────────────────────┐
+# │  🚀 GÉNÉRATEUR DE MAKEFILE STYLÉ - ÉDITION PLUGINS 🚀      │
+# │  Créé avec amour par un dev paresseux mais efficace        │
+# └─────────────────────────────────────────────────────────────┘
+
+set -e
+
+VERSION="2.0.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_DIR="$HOME/.config/mkf"
+CONFIG_FILE="$CONFIG_DIR/config"
+PLUGINS_DIR="$CONFIG_DIR/plugins"
+
+# Couleurs et styles
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+# Emojis stylés
+ROCKET="🚀"
+GEAR="⚙️"
+SPARKLES="✨"
+FIRE="🔥"
+PLUGIN="🔌"
+CHECK="✅"
+CROSS="❌"
+WARNING="⚠️"
+
+# ═══════════════════════════════════════════════════════════════
+# 🎨 SYSTÈME D'AFFICHAGE STYLÉ
+# ═══════════════════════════════════════════════════════════════
+
+log_info() { echo -e "${BLUE}${BOLD}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}${BOLD}[SUCCESS]${NC} $1"; }
+log_warning() { echo -e "${YELLOW}${BOLD}[WARNING]${NC} $1"; }
+log_error() { echo -e "${RED}${BOLD}[ERROR]${NC} $1"; }
+log_plugin() { echo -e "${PURPLE}${BOLD}[PLUGIN]${NC} $1"; }
+
 # ═══════════════════════════════════════════════════════════════
 # 🔄 SYSTÈME DE MISE À JOUR AUTOMATIQUE
 # ═══════════════════════════════════════════════════════════════
@@ -223,51 +269,7 @@ configure_updates() {
             echo "Usage: configure_updates [enable|disable|status]"
             ;;
     esac
-}#!/bin/bash
-
-# ┌─────────────────────────────────────────────────────────────┐
-# │  🚀 GÉNÉRATEUR DE MAKEFILE STYLÉ - ÉDITION PLUGINS 🚀      │
-# │  Créé avec amour par un dev paresseux mais efficace        │
-# └─────────────────────────────────────────────────────────────┘
-
-set -e
-
-VERSION="2.0.0"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_DIR="$HOME/.config/mkf"
-CONFIG_FILE="$CONFIG_DIR/config"
-PLUGINS_DIR="$CONFIG_DIR/plugins"
-
-# Couleurs et styles
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-DIM='\033[2m'
-NC='\033[0m'
-
-# Emojis stylés
-ROCKET="🚀"
-GEAR="⚙️"
-SPARKLES="✨"
-FIRE="🔥"
-PLUGIN="🔌"
-CHECK="✅"
-CROSS="❌"
-WARNING="⚠️"
-
-# ═══════════════════════════════════════════════════════════════
-# 🎨 SYSTÈME D'AFFICHAGE STYLÉ
-# ═══════════════════════════════════════════════════════════════
-
-log_info() { echo -e "${BLUE}${BOLD}[INFO]${NC} $1"; }
-log_success() { echo -e "${GREEN}${BOLD}[SUCCESS]${NC} $1"; }
-log_warning() { echo -e "${YELLOW}${BOLD}[WARNING]${NC} $1"; }
-log_error() { echo -e "${RED}${BOLD}[ERROR]${NC} $1"; }
-log_plugin() { echo -e "${PURPLE}${BOLD}[PLUGIN]${NC} $1"; }
+}
 
 # Animation de loading stylée
 show_spinner() {
@@ -1127,7 +1129,5 @@ EOF
     # Notification de mise à jour si disponible
     show_update_notification
 }
-}
-
 # Point d'entrée
 main "$@"

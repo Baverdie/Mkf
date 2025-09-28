@@ -1,41 +1,4 @@
-update_mkf() {
-    show_header
-    echo -e "${SPARKLES}${BOLD} MISE À JOUR MKF${NC}"
-    echo ""
-    
-    if ! detect_installation; then
-        log_error "MKF non installé"
-        read -p "$(echo -e "${CYAN}Appuie sur Entrée pour continuer...${NC}")"
-        return
-    fi
-    
-    log_info "Version actuelle: ${BOLD}$($INSTALL_PATH --version 2>/dev/null || echo "Inconnue")${NC}"
-    echo ""
-    
-    read -p "$(echo -e "${CYAN}Lancer la mise à jour automatique ? (Y/n): ${NC}")" -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]] && [[ -n $REPLY ]]; then
-        log_info "Mise à jour annulée"
-        return
-    fi
-    
-    # Utiliser la commande de mise à jour de MKF
-    if command -v mkf &> /dev/null; then
-        mkf --update
-    else
-        # Fallback : utiliser l'installateur
-        log_info "Utilisation de l'installateur pour la mise à jour..."
-        if command -v curl &> /dev/null; then
-            curl -fsSL https://raw.githubusercontent.com/Baverdie/Mkf/main/install.sh | bash -s -- --force
-        else
-            log_error "curl requis pour la mise à jour"
-            log_info "Installation manuelle nécessaire"
-        fi
-    fi
-    
-    echo ""
-    read -p "$(echo -e "${CYAN}Appuie sur Entrée pour continuer...${NC}")"
-}#!/bin/bash
+#!/bin/bash
 
 # ╔══════════════════════════════════════════════════════════════╗
 # ║              🚀 MKF MANAGER - GESTIONNAIRE COMPLET 🚀        ║
@@ -748,6 +711,45 @@ EOF
     read -p "$(echo -e "${CYAN}Appuie sur Entrée pour continuer...${NC}")"
 }
 
+update_mkf() {
+    show_header
+    echo -e "${SPARKLES}${BOLD} MISE À JOUR MKF${NC}"
+    echo ""
+    
+    if ! detect_installation; then
+        log_error "MKF non installé"
+        read -p "$(echo -e "${CYAN}Appuie sur Entrée pour continuer...${NC}")"
+        return
+    fi
+    
+    log_info "Version actuelle: ${BOLD}$($INSTALL_PATH --version 2>/dev/null || echo "Inconnue")${NC}"
+    echo ""
+    
+    read -p "$(echo -e "${CYAN}Lancer la mise à jour automatique ? (Y/n): ${NC}")" -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]] && [[ -n $REPLY ]]; then
+        log_info "Mise à jour annulée"
+        return
+    fi
+    
+    # Utiliser la commande de mise à jour de MKF
+    if command -v mkf &> /dev/null; then
+        mkf --update
+    else
+        # Fallback : utiliser l'installateur
+        log_info "Utilisation de l'installateur pour la mise à jour..."
+        if command -v curl &> /dev/null; then
+            curl -fsSL https://raw.githubusercontent.com/Baverdie/Mkf/main/install.sh | bash -s -- --force
+        else
+            log_error "curl requis pour la mise à jour"
+            log_info "Installation manuelle nécessaire"
+        fi
+    fi
+    
+    echo ""
+    read -p "$(echo -e "${CYAN}Appuie sur Entrée pour continuer...${NC}")"
+}
+
 # ═══════════════════════════════════════════════════════════════
 # 🎯 FONCTION PRINCIPALE
 # ═══════════════════════════════════════════════════════════════
@@ -822,10 +824,6 @@ main() {
                 ;;
         esac
     done
-}
-
-# Point d'entrée
-main "$@"
 }
 
 # Point d'entrée
