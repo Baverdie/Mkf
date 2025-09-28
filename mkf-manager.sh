@@ -611,8 +611,8 @@ reinstall_mkf() {
         echo ""
         echo "1. Ouvre un nouveau terminal"
         echo "2. Exécute la commande:"
-        echo -e "   ${YELLOW}curl -fsSL https://raw.githubusercontent.com/VOTRE-USERNAME/mkf-generator/main/install.sh | bash${NC}"
-        echo "3. Ou télécharge depuis: https://github.com/VOTRE-USERNAME/mkf-generator"
+        echo -e "   ${YELLOW}curl -fsSL https://raw.githubusercontent.com/Baverdie/Mkf/main/install.sh | bash${NC}"
+        echo "3. Ou télécharge depuis: https://github.com/Baverdie/Mkf"
         echo ""
     fi
     

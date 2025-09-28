@@ -11,7 +11,7 @@ set -e
 VERSION="2.0.0"
 REPO_USER="Baverdie"
 REPO_NAME="Mkf"
-BRANCH="main"
+BRANCH="main"               # ← À changer si nécessaire
 ALIAS_NAME="mkf"
 
 # URLs
