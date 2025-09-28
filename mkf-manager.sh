@@ -826,3 +826,7 @@ main() {
 
 # Point d'entrée
 main "$@"
+}
+
+# Point d'entrée
+main "$@"
