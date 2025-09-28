@@ -434,7 +434,7 @@ analyze_source_files() {
     
     for file in $src_files; do
         ((current_file++))
-        progress_bar $current_file $total_files
+        progress_bar $current_file $total_files "Analyse de $file"
         
         local filepath="$src_dir/$file"
         if [[ -f "$filepath" ]]; then
@@ -473,7 +473,8 @@ analyze_source_files() {
         sleep 0.01  # Animation fluide
     done
     
-    echo ""  # Nouvelle ligne après la barre de progression
+    # Nouvelle ligne après la barre de progression
+    echo ""
     echo "$project_type:$confidence"
 }
 

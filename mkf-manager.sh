@@ -1,4 +1,41 @@
-#!/bin/bash
+update_mkf() {
+    show_header
+    echo -e "${SPARKLES}${BOLD} MISE À JOUR MKF${NC}"
+    echo ""
+    
+    if ! detect_installation; then
+        log_error "MKF non installé"
+        read -p "$(echo -e "${CYAN}Appuie sur Entrée pour continuer...${NC}")"
+        return
+    fi
+    
+    log_info "Version actuelle: ${BOLD}$($INSTALL_PATH --version 2>/dev/null || echo "Inconnue")${NC}"
+    echo ""
+    
+    read -p "$(echo -e "${CYAN}Lancer la mise à jour automatique ? (Y/n): ${NC}")" -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]] && [[ -n $REPLY ]]; then
+        log_info "Mise à jour annulée"
+        return
+    fi
+    
+    # Utiliser la commande de mise à jour de MKF
+    if command -v mkf &> /dev/null; then
+        mkf --update
+    else
+        # Fallback : utiliser l'installateur
+        log_info "Utilisation de l'installateur pour la mise à jour..."
+        if command -v curl &> /dev/null; then
+            curl -fsSL https://raw.githubusercontent.com/Baverdie/Mkf/main/install.sh | bash -s -- --force
+        else
+            log_error "curl requis pour la mise à jour"
+            log_info "Installation manuelle nécessaire"
+        fi
+    fi
+    
+    echo ""
+    read -p "$(echo -e "${CYAN}Appuie sur Entrée pour continuer...${NC}")"
+}#!/bin/bash
 
 # ╔══════════════════════════════════════════════════════════════╗
 # ║              🚀 MKF MANAGER - GESTIONNAIRE COMPLET 🚀        ║
@@ -226,7 +263,8 @@ show_main_menu() {
     echo -e "  ${BOLD}4)${NC} ${SHIELD} Diagnostic et réparation"
     echo -e "  ${BOLD}5)${NC} ${FOLDER} Ouvrir dossier de configuration"
     echo -e "  ${BOLD}6)${NC} ${MAGIC} Test et validation"
-    echo -e "  ${BOLD}7)${NC} ${SPARKLES} Réinstallation propre"
+    echo -e "  ${BOLD}7)${NC} ${SPARKLES} Mise à jour MKF"
+    echo -e "  ${BOLD}8)${NC} ${ROCKET} Réinstallation propre"
     echo -e "  ${BOLD}0)${NC} ${EXIT} Quitter"
     echo ""
 }
@@ -595,7 +633,7 @@ reinstall_mkf() {
         1)
             if command -v curl &> /dev/null; then
                 log_info "Lancement de l'installateur automatique..."
-                curl -fsSL https://raw.githubusercontent.com/VOTRE-USERNAME/mkf-generator/main/install.sh | bash
+                curl -fsSL https://raw.githubusercontent.com/Baverdie/Mkf/main/install.sh | bash
             else
                 log_error "curl non disponible"
                 choice=2
@@ -721,6 +759,7 @@ main() {
         plugins) manage_plugins; exit 0 ;;
         diagnostic) diagnostic_system; exit 0 ;;
         config) configuration_avancee; exit 0 ;;
+        update) update_mkf; exit 0 ;;
         reinstall) reinstall_mkf; exit 0 ;;
         test) test_validation; exit 0 ;;
         --help|-h)
@@ -733,6 +772,7 @@ main() {
             echo "  plugins     Gérer les plugins"
             echo "  diagnostic  Diagnostic système"
             echo "  config      Configuration avancée"
+            echo "  update      Mettre à jour MKF"
             echo "  reinstall   Réinstallation propre"
             echo "  test        Tests et validation"
             echo ""
@@ -745,7 +785,7 @@ main() {
     while true; do
         show_main_menu
         
-        read -p "$(echo -e "${CYAN}Choix (0-7): ${NC}")" choice
+        read -p "$(echo -e "${CYAN}Choix (0-8): ${NC}")" choice
         
         case $choice in
             1) uninstall_mkf ;;
@@ -769,7 +809,8 @@ main() {
                 sleep 2
                 ;;
             6) test_validation ;;
-            7) reinstall_mkf ;;
+            7) update_mkf ;;
+            8) reinstall_mkf ;;
             0) 
                 echo ""
                 echo -e "${GREEN}À bientôt! 🚀${NC}"
