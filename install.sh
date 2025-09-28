@@ -128,21 +128,42 @@ download_scripts() {
     local temp_script="/tmp/mkf_generate_makefile.sh"
     local temp_manager="/tmp/mkf_manager.sh"
     
+    # Nettoyer les anciens fichiers temporaires
+    rm -f "$temp_script" "$temp_manager"
+    
     # Télécharger le générateur principal
     log "Téléchargement du générateur..."
     if command -v curl >/dev/null 2>&1; then
         if ! curl -fsSL "$SCRIPT_URL" -o "$temp_script"; then
             error "Échec du téléchargement du générateur avec curl"
-            error "Vérifiez l'URL: $SCRIPT_URL"
+            error "URL: $SCRIPT_URL"
             exit 1
         fi
     elif command -v wget >/dev/null 2>&1; then
         if ! wget -q "$SCRIPT_URL" -O "$temp_script"; then
             error "Échec du téléchargement du générateur avec wget"
-            error "Vérifiez l'URL: $SCRIPT_URL"
+            error "URL: $SCRIPT_URL"
             exit 1
         fi
     fi
+    
+    # Vérifier le générateur principal
+    if [[ ! -f "$temp_script" ]] || [[ ! -s "$temp_script" ]]; then
+        error "Générateur téléchargé vide ou inexistant"
+        error "Fichier: $temp_script"
+        ls -la /tmp/mkf_* 2>/dev/null || true
+        exit 1
+    fi
+    
+    if ! head -1 "$temp_script" | grep -q "#!/bin/bash"; then
+        error "Le générateur téléchargé n'est pas un script bash valide"
+        error "Première ligne: $(head -1 "$temp_script")"
+        rm -f "$temp_script" "$temp_manager"
+        exit 1
+    fi
+    
+    success "Générateur téléchargé: $(wc -l < "$temp_script") lignes"
+    log "Fichier générateur: $temp_script"
     
     # Télécharger le manager
     log "Téléchargement du gestionnaire..."
@@ -158,28 +179,24 @@ download_scripts() {
         fi
     fi
     
-    # Vérifier le générateur principal
-    if [[ ! -f "$temp_script" ]] || [[ ! -s "$temp_script" ]]; then
-        error "Générateur téléchargé vide ou inexistant"
-        exit 1
-    fi
-    
-    if ! head -1 "$temp_script" | grep -q "#!/bin/bash"; then
-        error "Le générateur téléchargé n'est pas un script bash valide"
-        rm -f "$temp_script" "$temp_manager"
-        exit 1
-    fi
-    
-    success "Générateur téléchargé: $(wc -l < "$temp_script") lignes"
-    
     # Vérifier le manager si téléchargé
     if [[ -n "$temp_manager" ]] && [[ -f "$temp_manager" ]] && [[ -s "$temp_manager" ]]; then
         if head -1 "$temp_manager" | grep -q "#!/bin/bash"; then
             success "Gestionnaire téléchargé: $(wc -l < "$temp_manager") lignes"
+            log "Fichier gestionnaire: $temp_manager"
         else
             warning "Gestionnaire invalide, ignoré"
             temp_manager=""
         fi
+    else
+        log "Gestionnaire non téléchargé"
+        temp_manager=""
+    fi
+    
+    # Vérifier que les fichiers existent avant de retourner
+    if [[ ! -f "$temp_script" ]]; then
+        error "ERREUR CRITIQUE: Fichier générateur perdu après téléchargement"
+        exit 1
     fi
     
     echo "$temp_script|$temp_manager"
@@ -193,6 +210,12 @@ install_scripts() {
     
     local target_script="$INSTALL_DIR/$ALIAS_NAME"
     local target_manager="$INSTALL_DIR/mkf-manager"
+    
+    # Vérifier que le générateur existe
+    if [[ ! -f "$temp_script" ]]; then
+        error "Fichier générateur temporaire introuvable: $temp_script"
+        exit 1
+    fi
     
     log "Installation du générateur dans $target_script..."
     
@@ -246,7 +269,7 @@ install_scripts() {
         warning "Gestionnaire non disponible (installation du générateur seulement)"
     fi
     
-    # Nettoyer
+    # Nettoyer seulement à la fin
     rm -f "$temp_script" "$temp_manager"
 }
 
