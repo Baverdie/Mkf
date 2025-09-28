@@ -7,7 +7,7 @@
 
 set -e
 
-VERSION="2.0.0"
+VERSION="2.1.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="$HOME/.config/mkf"
 CONFIG_FILE="$CONFIG_DIR/config"
@@ -80,7 +80,7 @@ get_latest_version() {
     
     # Fallback : chercher dans le script sur GitHub
     if [[ -z "$latest_version" ]] && command -v curl >/dev/null 2>&1; then
-        latest_version=$(curl -s "$REPO_RAW_URL/generate_makefile.sh" 2>/dev/null | grep '^VERSION=' | head -1 | sed 's/VERSION="\([^"]*\)"/\1/' 2>/dev/null)
+        latest_version=$(curl -s "$REPO_RAW_URL/generate_makefile.sh" 2>/dev/null | grep '^VERSION=' | head -1 | sed 's/VERSION="2.1.0"]*\)"/\1/' 2>/dev/null)
     fi
     
     echo "$latest_version"
@@ -350,7 +350,7 @@ MAKEFILE_STYLE="$MAKEFILE_STYLE"
 FALLBACK_EMOJI="$FALLBACK_EMOJI"
 
 # Méta
-CONFIG_VERSION="$VERSION"
+CONFIG_VERSION="2.1.0"
 LAST_UPDATE="$(date)"
 EOF
 }
@@ -363,7 +363,7 @@ EOF
 plugin_recursive_scan() {
     if [[ "$RECURSIVE_SEARCH" != "true" ]]; then return; fi
     
-    log_plugin "Scan récursif activé ${PLUGIN}"
+    log_plugin "Scan récursif activé ${PLUGIN}" >&2
     local src_dir="src"
     if [[ -d "$src_dir" ]]; then
         find "$src_dir" -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" | sed "s|^$src_dir/||" | sort
@@ -378,7 +378,7 @@ plugin_auto_libraries() {
     local libraries=""
     local detected_libs=()
     
-    log_plugin "Détection des bibliothèques ${PLUGIN}"
+    log_plugin "Détection des bibliothèques ${PLUGIN}" >&2
     
     for file in $src_files; do
         if [[ -f "src/$file" ]]; then
@@ -387,27 +387,27 @@ plugin_auto_libraries() {
             if [[ $content =~ \#include.*opengl|GL/gl\.h ]] && [[ ! " ${detected_libs[@]} " =~ " opengl " ]]; then
                 libraries="$libraries -lGL -lGLU -lglfw"
                 detected_libs+=("opengl")
-                log_info "  ${CHECK} OpenGL détecté"
+                log_info "  ${CHECK} OpenGL détecté" >&2
             fi
             if [[ $content =~ \#include.*pthread ]] && [[ ! " ${detected_libs[@]} " =~ " pthread " ]]; then
                 libraries="$libraries -lpthread"
                 detected_libs+=("pthread")
-                log_info "  ${CHECK} pthreads détecté"
+                log_info "  ${CHECK} pthreads détecté" >&2
             fi
             if [[ $content =~ \#include.*math\.h ]] && [[ ! " ${detected_libs[@]} " =~ " math " ]]; then
                 libraries="$libraries -lm"
                 detected_libs+=("math")
-                log_info "  ${CHECK} math.h détecté"
+                log_info "  ${CHECK} math.h détecté" >&2
             fi
             if [[ $content =~ \#include.*curl ]] && [[ ! " ${detected_libs[@]} " =~ " curl " ]]; then
                 libraries="$libraries -lcurl"
                 detected_libs+=("curl")
-                log_info "  ${CHECK} cURL détecté"
+                log_info "  ${CHECK} cURL détecté" >&2
             fi
             if [[ $content =~ \#include.*sqlite ]] && [[ ! " ${detected_libs[@]} " =~ " sqlite " ]]; then
                 libraries="$libraries -lsqlite3"
                 detected_libs+=("sqlite")
-                log_info "  ${CHECK} SQLite détecté"
+                log_info "  ${CHECK} SQLite détecté" >&2
             fi
         fi
     done
@@ -658,14 +658,14 @@ analyze_source_files() {
     local confidence=0
     local src_dir="src"
     
-    log_info "Analyse du code source..."
+    log_info "Analyse du code source..." >&2
     
     local total_files=$(echo $src_files | wc -w)
     local current_file=0
     
     for file in $src_files; do
         ((current_file++))
-        progress_bar $current_file $total_files "Analyse de $file"
+        progress_bar $current_file $total_files "Analyse de $file" >&2
         
         local filepath="$src_dir/$file"
         if [[ -f "$filepath" ]]; then
@@ -705,7 +705,7 @@ analyze_source_files() {
     done
     
     # Nouvelle ligne après la barre de progression
-    echo ""
+    echo "" >&2
     echo "$project_type:$confidence"
 }
 
@@ -1129,5 +1129,6 @@ EOF
     # Notification de mise à jour si disponible
     show_update_notification
 }
+
 # Point d'entrée
 main "$@"

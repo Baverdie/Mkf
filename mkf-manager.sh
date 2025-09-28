@@ -7,7 +7,7 @@
 
 set -e
 
-VERSION="2.0.0"
+VERSION="2.1.0"
 ALIAS_NAME="mkf"
 MANAGER_NAME="mkf-manager"
 
@@ -266,7 +266,7 @@ show_plugins_menu() {
             status_text="${GREEN}Activé${NC}"
         fi
         
-        printf "  ${BOLD}%2d)${NC} %s %s %-40s [%s]\n" $((i+1)) "$emoji" "$status_icon" "$description" "$status_text"
+        echo -e "  ${BOLD}$((i+1)))${NC} $emoji $status_icon $description [$status_text]"
     done
     
     echo ""
