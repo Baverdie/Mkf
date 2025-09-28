@@ -7,12 +7,13 @@
 
 set -e
 
-# Chargement de la version depuis le fichier centralisé
+# Chargement de la version depuis la configuration globale
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "$SCRIPT_DIR/version.sh" ]]; then
-    VERSION="$("$SCRIPT_DIR/version.sh" get)"
+if [[ -f "$SCRIPT_DIR/version-config.sh" ]]; then
+    source "$SCRIPT_DIR/version-config.sh"
+    VERSION="$MKF_VERSION"
 else
-    VERSION="2.2.0"  # Fallback
+    VERSION="2.2.1"  # Fallback
 fi
 ALIAS_NAME="mkf"
 MANAGER_NAME="mkf-manager"
@@ -168,7 +169,7 @@ EOF
 show_header() {
     clear
     echo -e "${PURPLE}${BOLD}"
-    cat << "EOF"
+    cat << EOF
     ╔══════════════════════════════════════════════════════════════╗
     ║                                                              ║
     ║    ███╗   ███╗██╗  ██╗███████╗                              ║
@@ -178,7 +179,7 @@ show_header() {
     ║    ██║ ╚═╝ ██║██║  ██╗██║                                   ║
     ║    ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝                                   ║
     ║                                                              ║
-    ║           🚀 GESTIONNAIRE MKF v2.0.0 🚀                      ║
+    ║           🚀 GESTIONNAIRE MKF v$VERSION 🚀                   ║
     ║                                                              ║
     ╚══════════════════════════════════════════════════════════════╝
 EOF

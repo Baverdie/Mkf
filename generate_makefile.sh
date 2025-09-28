@@ -7,12 +7,13 @@
 
 set -e
 
-# Chargement de la version depuis le fichier centralisé
+# Chargement de la version depuis la configuration globale
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "$SCRIPT_DIR/version.sh" ]]; then
-    VERSION="$("$SCRIPT_DIR/version.sh" get)"
+if [[ -f "$SCRIPT_DIR/version-config.sh" ]]; then
+    source "$SCRIPT_DIR/version-config.sh"
+    VERSION="$MKF_VERSION"
 else
-    VERSION="2.2.0"  # Fallback
+    VERSION="2.2.1"  # Fallback
 fi
 CONFIG_DIR="$HOME/.config/mkf"
 CONFIG_FILE="$CONFIG_DIR/config"
@@ -83,9 +84,9 @@ get_latest_version() {
         latest_version=$(curl -s "$REPO_API_URL" 2>/dev/null | grep '"tag_name"' | sed 's/.*"tag_name": *"v\?\([^"]*\)".*/\1/' 2>/dev/null)
     fi
     
-    # Fallback : chercher dans le script sur GitHub
+    # Fallback : chercher dans version-config.sh sur GitHub
     if [[ -z "$latest_version" ]] && command -v curl >/dev/null 2>&1; then
-        latest_version=$(curl -s "$REPO_RAW_URL/VERSION" 2>/dev/null | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' 2>/dev/null)
+        latest_version=$(curl -s "$REPO_RAW_URL/version-config.sh" 2>/dev/null | grep 'export MKF_VERSION=' | sed 's/.*export MKF_VERSION="\([^"]*\)".*/\1/' 2>/dev/null)
     fi
     
     echo "$latest_version"
@@ -1212,7 +1213,7 @@ main() {
             --simulate-update)
                 # Fonction cachée pour tester les notifications
                 shift
-                local test_version="${1:-2.5.0}"
+                local test_version="${1:-$(echo "$VERSION" | awk -F. '{print $1"."$2+1".0"}')}"
                 mkdir -p "$CONFIG_DIR"
                 echo -e "$test_version\n$(date +%s)" > "$UPDATE_CACHE_FILE.available"
                 echo "Simulation d'une mise à jour vers $test_version créée"
