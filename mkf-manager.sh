@@ -7,7 +7,13 @@
 
 set -e
 
-VERSION="2.2.0"
+# Chargement de la version depuis le fichier centralisé
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/version.sh" ]]; then
+    VERSION="$("$SCRIPT_DIR/version.sh" get)"
+else
+    VERSION="2.2.0"  # Fallback
+fi
 ALIAS_NAME="mkf"
 MANAGER_NAME="mkf-manager"
 
