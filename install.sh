@@ -20,17 +20,31 @@ RAW_URL="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$BRANCH"
 SCRIPT_URL="$RAW_URL/generate_makefile.sh"
 MANAGER_URL="$RAW_URL/mkf-manager.sh"
 
-# Couleurs
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-DIM='\033[2m'
-UNDERLINE='\033[4m'
-NC='\033[0m'
+# Couleurs avec détection automatique
+if [[ -t 1 ]] && [[ "${TERM:-}" != "dumb" ]] && command -v tput >/dev/null 2>&1 && tput colors >/dev/null 2>&1 && [[ $(tput colors) -ge 8 ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[0;33m'
+    BLUE='\033[0;34m'
+    PURPLE='\033[0;35m'
+    CYAN='\033[0;36m'
+    BOLD='\033[1m'
+    DIM='\033[2m'
+    UNDERLINE='\033[4m'
+    NC='\033[0m'
+else
+    # Pas de couleurs si le terminal ne les supporte pas
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    PURPLE=''
+    CYAN=''
+    BOLD=''
+    DIM=''
+    UNDERLINE=''
+    NC=''
+fi
 
 # Emojis
 ROCKET="🚀"
@@ -125,11 +139,14 @@ detect_system() {
 download_scripts() {
     log "Téléchargement depuis $REPO_URL..."
     
-    local temp_script="/tmp/mkf_generate_makefile.sh"
-    local temp_manager="/tmp/mkf_manager.sh"
+    # Créer un dossier temporaire unique
+    local temp_dir="/tmp/mkf-install-$"
+    mkdir -p "$temp_dir"
     
-    # Nettoyer les anciens fichiers temporaires
-    rm -f "$temp_script" "$temp_manager"
+    local temp_script="$temp_dir/generate_makefile.sh"
+    local temp_manager="$temp_dir/mkf-manager.sh"
+    
+    log "Dossier temporaire: $temp_dir"
     
     # Télécharger le générateur principal
     log "Téléchargement du générateur..."
@@ -137,69 +154,73 @@ download_scripts() {
         if ! curl -fsSL "$SCRIPT_URL" -o "$temp_script"; then
             error "Échec du téléchargement du générateur avec curl"
             error "URL: $SCRIPT_URL"
+            rm -rf "$temp_dir"
             exit 1
         fi
     elif command -v wget >/dev/null 2>&1; then
         if ! wget -q "$SCRIPT_URL" -O "$temp_script"; then
             error "Échec du téléchargement du générateur avec wget"
             error "URL: $SCRIPT_URL"
+            rm -rf "$temp_dir"
             exit 1
         fi
     fi
     
-    # Vérifier le générateur principal
-    if [[ ! -f "$temp_script" ]] || [[ ! -s "$temp_script" ]]; then
-        error "Générateur téléchargé vide ou inexistant"
-        error "Fichier: $temp_script"
-        ls -la /tmp/mkf_* 2>/dev/null || true
+    # Vérifier immédiatement après téléchargement
+    log "Vérification du générateur téléchargé..."
+    if [[ ! -f "$temp_script" ]]; then
+        error "ERREUR: Fichier générateur non créé"
+        error "Attendu: $temp_script"
+        ls -la "$temp_dir" 2>/dev/null || true
+        rm -rf "$temp_dir"
+        exit 1
+    fi
+    
+    if [[ ! -s "$temp_script" ]]; then
+        error "ERREUR: Fichier générateur vide"
+        error "Taille: $(wc -c < "$temp_script" 2>/dev/null || echo "0") bytes"
+        rm -rf "$temp_dir"
         exit 1
     fi
     
     if ! head -1 "$temp_script" | grep -q "#!/bin/bash"; then
-        error "Le générateur téléchargé n'est pas un script bash valide"
-        error "Première ligne: $(head -1 "$temp_script")"
-        rm -f "$temp_script" "$temp_manager"
+        error "ERREUR: Fichier générateur invalide"
+        error "Première ligne: $(head -1 "$temp_script" 2>/dev/null || echo "vide")"
+        rm -rf "$temp_dir"
         exit 1
     fi
     
     success "Générateur téléchargé: $(wc -l < "$temp_script") lignes"
-    log "Fichier générateur: $temp_script"
     
-    # Télécharger le manager
+    # Télécharger le manager (optionnel)
     log "Téléchargement du gestionnaire..."
     if command -v curl >/dev/null 2>&1; then
-        if ! curl -fsSL "$MANAGER_URL" -o "$temp_manager"; then
-            warning "Échec du téléchargement du gestionnaire (optionnel)"
-            temp_manager=""
-        fi
-    elif command -v wget >/dev/null 2>&1; then
-        if ! wget -q "$MANAGER_URL" -O "$temp_manager"; then
-            warning "Échec du téléchargement du gestionnaire (optionnel)"
-            temp_manager=""
-        fi
-    fi
-    
-    # Vérifier le manager si téléchargé
-    if [[ -n "$temp_manager" ]] && [[ -f "$temp_manager" ]] && [[ -s "$temp_manager" ]]; then
-        if head -1 "$temp_manager" | grep -q "#!/bin/bash"; then
-            success "Gestionnaire téléchargé: $(wc -l < "$temp_manager") lignes"
-            log "Fichier gestionnaire: $temp_manager"
+        if curl -fsSL "$MANAGER_URL" -o "$temp_manager" 2>/dev/null; then
+            if [[ -f "$temp_manager" ]] && [[ -s "$temp_manager" ]] && head -1 "$temp_manager" | grep -q "#!/bin/bash"; then
+                success "Gestionnaire téléchargé: $(wc -l < "$temp_manager") lignes"
+            else
+                log "Gestionnaire invalide, ignoré"
+                rm -f "$temp_manager"
+                temp_manager=""
+            fi
         else
-            warning "Gestionnaire invalide, ignoré"
+            log "Gestionnaire non disponible (optionnel)"
             temp_manager=""
         fi
     else
-        log "Gestionnaire non téléchargé"
+        log "Gestionnaire non téléchargé (wget non testé)"
         temp_manager=""
     fi
     
-    # Vérifier que les fichiers existent avant de retourner
+    # Vérification finale avant retour
     if [[ ! -f "$temp_script" ]]; then
-        error "ERREUR CRITIQUE: Fichier générateur perdu après téléchargement"
+        error "ERREUR CRITIQUE: Fichier générateur perdu"
+        rm -rf "$temp_dir"
         exit 1
     fi
     
-    echo "$temp_script|$temp_manager"
+    log "Fichiers prêts dans: $temp_dir"
+    echo "$temp_script|$temp_manager|$temp_dir"
 }
 
 # Installer les scripts
@@ -207,19 +228,26 @@ install_scripts() {
     local files_info="$1"
     local temp_script=$(echo "$files_info" | cut -d'|' -f1)
     local temp_manager=$(echo "$files_info" | cut -d'|' -f2)
+    local temp_dir=$(echo "$files_info" | cut -d'|' -f3)
     
     local target_script="$INSTALL_DIR/$ALIAS_NAME"
     local target_manager="$INSTALL_DIR/mkf-manager"
     
-    # Vérifier que le générateur existe
+    log "Installation depuis: $temp_dir"
+    
+    # Double vérification que le générateur existe
     if [[ ! -f "$temp_script" ]]; then
-        error "Fichier générateur temporaire introuvable: $temp_script"
+        error "ERREUR CRITIQUE: Fichier générateur introuvable"
+        error "Attendu: $temp_script"
+        error "Contenu du dossier temporaire:"
+        ls -la "$temp_dir" 2>/dev/null || echo "Dossier inexistant"
+        rm -rf "$temp_dir"
         exit 1
     fi
     
-    log "Installation du générateur dans $target_script..."
+    log "Installation du générateur: $temp_script -> $target_script"
     
-    # Demander confirmation si le fichier existe déjà
+    # Demander confirmation si déjà installé
     if [[ -f "$target_script" ]]; then
         warning "MKF est déjà installé"
         if [[ "${FORCE_INSTALL:-}" != "true" ]]; then
@@ -227,7 +255,7 @@ install_scripts() {
             echo
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 log "Installation annulée"
-                rm -f "$temp_script" "$temp_manager"
+                rm -rf "$temp_dir"
                 exit 0
             fi
         fi
@@ -239,10 +267,18 @@ install_scripts() {
     
     # Installer le générateur principal
     if [[ "$INSTALL_TYPE" == "system" ]]; then
-        sudo cp "$temp_script" "$target_script"
+        if ! sudo cp "$temp_script" "$target_script"; then
+            error "Échec de l'installation système du générateur"
+            rm -rf "$temp_dir"
+            exit 1
+        fi
         sudo chmod +x "$target_script"
     else
-        cp "$temp_script" "$target_script"
+        if ! cp "$temp_script" "$target_script"; then
+            error "Échec de l'installation utilisateur du générateur"
+            rm -rf "$temp_dir"
+            exit 1
+        fi
         chmod +x "$target_script"
     fi
     
@@ -250,27 +286,40 @@ install_scripts() {
     
     # Installer le gestionnaire si disponible
     if [[ -n "$temp_manager" ]] && [[ -f "$temp_manager" ]]; then
-        log "Installation du gestionnaire dans $target_manager..."
+        log "Installation du gestionnaire: $temp_manager -> $target_manager"
         
         if [[ -f "$target_manager" ]]; then
             cp "$target_manager" "$target_manager.backup.$(date +%s)"
+            log "Backup du gestionnaire créé"
         fi
         
         if [[ "$INSTALL_TYPE" == "system" ]]; then
-            sudo cp "$temp_manager" "$target_manager"
-            sudo chmod +x "$target_manager"
+            if sudo cp "$temp_manager" "$target_manager" && sudo chmod +x "$target_manager"; then
+                success "Gestionnaire installé: $target_manager"
+            else
+                warning "Échec de l'installation du gestionnaire (non critique)"
+            fi
         else
-            cp "$temp_manager" "$target_manager"
-            chmod +x "$target_manager"
+            if cp "$temp_manager" "$target_manager" && chmod +x "$target_manager"; then
+                success "Gestionnaire installé: $target_manager"
+            else
+                warning "Échec de l'installation du gestionnaire (non critique)"
+            fi
         fi
-        
-        success "Gestionnaire installé: $target_manager"
     else
-        warning "Gestionnaire non disponible (installation du générateur seulement)"
+        log "Gestionnaire non disponible, installation du générateur seulement"
     fi
     
-    # Nettoyer seulement à la fin
-    rm -f "$temp_script" "$temp_manager"
+    # Vérification post-installation
+    if [[ ! -x "$target_script" ]]; then
+        error "ERREUR: Le générateur installé n'est pas exécutable"
+        rm -rf "$temp_dir"
+        exit 1
+    fi
+    
+    # Nettoyage du dossier temporaire
+    rm -rf "$temp_dir"
+    log "Dossier temporaire nettoyé"
 }
 
 # Configurer les alias shell
@@ -468,12 +517,49 @@ EOF
 # ═══════════════════════════════════════════════════════════════
 
 main() {
+    # Options de ligne de commande
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --silent)
+                SILENT=true
+                FORCE_INSTALL=true
+                shift
+                ;;
+            --no-colors)
+                # Forcer la désactivation des couleurs
+                RED='' GREEN='' YELLOW='' BLUE='' PURPLE='' CYAN=''
+                BOLD='' DIM='' UNDERLINE='' NC=''
+                shift
+                ;;
+            --force)
+                FORCE_INSTALL=true
+                shift
+                ;;
+            --help|-h)
+                echo "Installation MKF - Options disponibles:"
+                echo "  --silent     Installation silencieuse"
+                echo "  --no-colors  Désactiver les couleurs"
+                echo "  --force      Forcer l'installation sans confirmation"
+                exit 0
+                ;;
+            *)
+                echo "Option inconnue: $1"
+                echo "Utilise --help pour voir les options disponibles"
+                exit 1
+                ;;
+        esac
+    done
+    
     # Mode silencieux pour automatisation
-    if [[ "${1:-}" == "--silent" ]] || [[ "${SILENT_INSTALL:-}" == "true" ]]; then
+    if [[ "${SILENT_INSTALL:-}" == "true" ]]; then
         SILENT=true
         FORCE_INSTALL=true
-    else
-        SILENT=false
+    fi
+    
+    # Définir les valeurs par défaut si pas déjà définies
+    SILENT="${SILENT:-false}"
+    
+    if [[ "$SILENT" != "true" ]]; then
         show_banner
     fi
     
