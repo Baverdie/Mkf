@@ -1,639 +1,205 @@
 #!/bin/bash
 
-# ╔══════════════════════════════════════════════════════════════╗
-# ║              🚀 MKF ONE-LINER INSTALLER 🚀                   ║
-# ║     Installation automatique depuis GitHub en une ligne      ║
-# ╚══════════════════════════════════════════════════════════════╝
+# Installation MKF - Version simple et robuste
 
 set -e
 
 # Configuration
-VERSION="2.0.0"
 REPO_USER="Baverdie"
 REPO_NAME="Mkf"
-BRANCH="main"               # ← À changer si nécessaire
+BRANCH="main"
 ALIAS_NAME="mkf"
 
 # URLs
-REPO_URL="https://github.com/$REPO_USER/$REPO_NAME"
-RAW_URL="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$BRANCH"
-SCRIPT_URL="$RAW_URL/generate_makefile.sh"
-MANAGER_URL="$RAW_URL/mkf-manager.sh"
+SCRIPT_URL="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$BRANCH/generate_makefile.sh"
+MANAGER_URL="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$BRANCH/mkf-manager.sh"
 
-# Couleurs avec détection automatique
-if [[ -t 1 ]] && [[ "${TERM:-}" != "dumb" ]] && command -v tput >/dev/null 2>&1 && tput colors >/dev/null 2>&1 && [[ $(tput colors) -ge 8 ]]; then
+# Couleurs simples
+if [[ -t 1 ]]; then
     RED='\033[0;31m'
     GREEN='\033[0;32m'
     YELLOW='\033[0;33m'
     BLUE='\033[0;34m'
-    PURPLE='\033[0;35m'
-    CYAN='\033[0;36m'
     BOLD='\033[1m'
-    DIM='\033[2m'
-    UNDERLINE='\033[4m'
     NC='\033[0m'
 else
-    # Pas de couleurs si le terminal ne les supporte pas
-    RED=''
-    GREEN=''
-    YELLOW=''
-    BLUE=''
-    PURPLE=''
-    CYAN=''
-    BOLD=''
-    DIM=''
-    UNDERLINE=''
-    NC=''
+    RED='' GREEN='' YELLOW='' BLUE='' BOLD='' NC=''
 fi
 
-# Emojis
-ROCKET="🚀"
-SUCCESS="✅"
-ERROR="❌"
-WARNING="⚠️"
-DOWNLOAD="📥"
-INSTALL="🔧"
-SPARKLES="✨"
+echo -e "${BLUE}${BOLD}🚀 Installation MKF${NC}"
+echo ""
 
-# ═══════════════════════════════════════════════════════════════
-# 🎨 FUNCTIONS
-# ═══════════════════════════════════════════════════════════════
+# Détection du système
+if [[ "$EUID" -eq 0 ]]; then
+    INSTALL_DIR="/usr/local/bin"
+    echo "Installation système détectée"
+else
+    INSTALL_DIR="$HOME/bin"
+    mkdir -p "$INSTALL_DIR"
+    echo "Installation utilisateur: $INSTALL_DIR"
+fi
 
-log() { echo -e "${BLUE}[MKF]${NC} $1"; }
-success() { echo -e "${GREEN}${SUCCESS}${NC} $1"; }
-error() { echo -e "${RED}${ERROR}${NC} $1"; }
-warning() { echo -e "${YELLOW}${WARNING}${NC} $1"; }
+# Fichiers temporaires avec noms fixes
+TEMP_SCRIPT="/tmp/mkf_script_temp.sh"
+TEMP_MANAGER="/tmp/mkf_manager_temp.sh"
+TARGET_SCRIPT="$INSTALL_DIR/$ALIAS_NAME"
+TARGET_MANAGER="$INSTALL_DIR/mkf-manager"
 
-show_banner() {
-    clear
-    echo -e "${PURPLE}${BOLD}"
-    cat << "EOF"
-    ╔══════════════════════════════════════════════════════════════╗
-    ║                                                              ║
-    ║    ███╗   ███╗██╗  ██╗███████╗                              ║
-    ║    ████╗ ████║██║ ██╔╝██╔════╝                              ║
-    ║    ██╔████╔██║█████╔╝ █████╗                                ║
-    ║    ██║╚██╔╝██║██╔═██╗ ██╔══╝                                ║
-    ║    ██║ ╚═╝ ██║██║  ██╗██║                                   ║
-    ║    ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝                                   ║
-    ║                                                              ║
-    ║           🚀 INSTALLATION AUTOMATIQUE 🚀                     ║
-    ║                    One-liner installer                      ║
-    ║                                                              ║
-    ╚══════════════════════════════════════════════════════════════╝
-EOF
-    echo -e "${NC}"
-}
+# Nettoyage initial
+rm -f "$TEMP_SCRIPT" "$TEMP_MANAGER"
 
-# Vérifier les prérequis
-check_requirements() {
-    log "Vérification des prérequis..."
-    
-    # Vérifier curl ou wget
-    if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
-        error "curl ou wget requis pour le téléchargement"
-        exit 1
-    fi
-    
-    # Vérifier bash
-    if [[ -z "$BASH_VERSION" ]]; then
-        error "Bash requis pour l'installation"
-        exit 1
-    fi
-    
-    success "Prérequis OK"
-}
+echo "Téléchargement du générateur..."
 
-# Détecter le système
-detect_system() {
-    log "Détection du système..."
-    
-    # OS
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        OS="linux"
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        OS="macos"
-    elif [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "msys" ]]; then
-        OS="windows"
+# Téléchargement du générateur
+if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$SCRIPT_URL" -o "$TEMP_SCRIPT"
+elif command -v wget >/dev/null 2>&1; then
+    wget -q "$SCRIPT_URL" -O "$TEMP_SCRIPT"
+else
+    echo -e "${RED}Erreur: curl ou wget requis${NC}"
+    exit 1
+fi
+
+# Vérification immédiate
+if [[ ! -f "$TEMP_SCRIPT" ]] || [[ ! -s "$TEMP_SCRIPT" ]]; then
+    echo -e "${RED}Erreur: Téléchargement du générateur échoué${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✅ Générateur téléchargé: $(wc -l < "$TEMP_SCRIPT") lignes${NC}"
+
+# Téléchargement du gestionnaire (optionnel)
+echo "Téléchargement du gestionnaire..."
+if command -v curl >/dev/null 2>&1; then
+    if curl -fsSL "$MANAGER_URL" -o "$TEMP_MANAGER" 2>/dev/null; then
+        if [[ -f "$TEMP_MANAGER" ]] && [[ -s "$TEMP_MANAGER" ]]; then
+            echo -e "${GREEN}✅ Gestionnaire téléchargé: $(wc -l < "$TEMP_MANAGER") lignes${NC}"
+        else
+            rm -f "$TEMP_MANAGER"
+            echo "⚠️  Gestionnaire non disponible"
+        fi
     else
-        OS="unknown"
+        echo "⚠️  Gestionnaire non disponible"
     fi
-    
-    # Shell
-    SHELL_NAME=$(basename "$SHELL")
-    
-    # Installation directory
+fi
+
+# Installation du générateur
+echo "Installation du générateur: $TARGET_SCRIPT"
+
+if [[ -f "$TARGET_SCRIPT" ]]; then
+    echo "⚠️  MKF déjà installé"
+    read -p "Remplacer ? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Installation annulée"
+        rm -f "$TEMP_SCRIPT" "$TEMP_MANAGER"
+        exit 0
+    fi
+    cp "$TARGET_SCRIPT" "$TARGET_SCRIPT.backup.$(date +%s)"
+    echo "✅ Backup créé"
+fi
+
+# Copie du générateur
+if [[ "$EUID" -eq 0 ]]; then
+    cp "$TEMP_SCRIPT" "$TARGET_SCRIPT"
+    chmod +x "$TARGET_SCRIPT"
+else
+    cp "$TEMP_SCRIPT" "$TARGET_SCRIPT"
+    chmod +x "$TARGET_SCRIPT"
+fi
+
+echo -e "${GREEN}✅ Générateur installé: $TARGET_SCRIPT${NC}"
+
+# Installation du gestionnaire
+if [[ -f "$TEMP_MANAGER" ]]; then
+    echo "Installation du gestionnaire: $TARGET_MANAGER"
     if [[ "$EUID" -eq 0 ]]; then
-        INSTALL_DIR="/usr/local/bin"
-        INSTALL_TYPE="system"
+        cp "$TEMP_MANAGER" "$TARGET_MANAGER"
+        chmod +x "$TARGET_MANAGER"
     else
-        INSTALL_DIR="$HOME/bin"
-        INSTALL_TYPE="user"
-        mkdir -p "$INSTALL_DIR"
+        cp "$TEMP_MANAGER" "$TARGET_MANAGER"
+        chmod +x "$TARGET_MANAGER"
     fi
-    
-    success "Système: $OS, Shell: $SHELL_NAME, Installation: $INSTALL_TYPE"
-}
+    echo -e "${GREEN}✅ Gestionnaire installé: $TARGET_MANAGER${NC}"
+fi
 
-# Télécharger les scripts
-download_scripts() {
-    log "Téléchargement depuis $REPO_URL..."
-    
-    # Créer un dossier temporaire unique
-    local temp_dir="/tmp/mkf-install-$"
-    mkdir -p "$temp_dir"
-    
-    local temp_script="$temp_dir/generate_makefile.sh"
-    local temp_manager="$temp_dir/mkf-manager.sh"
-    
-    log "Dossier temporaire: $temp_dir"
-    
-    # Télécharger le générateur principal
-    log "Téléchargement du générateur..."
-    if command -v curl >/dev/null 2>&1; then
-        if ! curl -fsSL "$SCRIPT_URL" -o "$temp_script"; then
-            error "Échec du téléchargement du générateur avec curl"
-            error "URL: $SCRIPT_URL"
-            rm -rf "$temp_dir"
-            exit 1
-        fi
-    elif command -v wget >/dev/null 2>&1; then
-        if ! wget -q "$SCRIPT_URL" -O "$temp_script"; then
-            error "Échec du téléchargement du générateur avec wget"
-            error "URL: $SCRIPT_URL"
-            rm -rf "$temp_dir"
-            exit 1
-        fi
-    fi
-    
-    # Vérifier immédiatement après téléchargement
-    log "Vérification du générateur téléchargé..."
-    if [[ ! -f "$temp_script" ]]; then
-        error "ERREUR: Fichier générateur non créé"
-        error "Attendu: $temp_script"
-        ls -la "$temp_dir" 2>/dev/null || true
-        rm -rf "$temp_dir"
-        exit 1
-    fi
-    
-    if [[ ! -s "$temp_script" ]]; then
-        error "ERREUR: Fichier générateur vide"
-        error "Taille: $(wc -c < "$temp_script" 2>/dev/null || echo "0") bytes"
-        rm -rf "$temp_dir"
-        exit 1
-    fi
-    
-    if ! head -1 "$temp_script" | grep -q "#!/bin/bash"; then
-        error "ERREUR: Fichier générateur invalide"
-        error "Première ligne: $(head -1 "$temp_script" 2>/dev/null || echo "vide")"
-        rm -rf "$temp_dir"
-        exit 1
-    fi
-    
-    success "Générateur téléchargé: $(wc -l < "$temp_script") lignes"
-    
-    # Télécharger le manager (optionnel)
-    log "Téléchargement du gestionnaire..."
-    if command -v curl >/dev/null 2>&1; then
-        if curl -fsSL "$MANAGER_URL" -o "$temp_manager" 2>/dev/null; then
-            if [[ -f "$temp_manager" ]] && [[ -s "$temp_manager" ]] && head -1 "$temp_manager" | grep -q "#!/bin/bash"; then
-                success "Gestionnaire téléchargé: $(wc -l < "$temp_manager") lignes"
-            else
-                log "Gestionnaire invalide, ignoré"
-                rm -f "$temp_manager"
-                temp_manager=""
-            fi
-        else
-            log "Gestionnaire non disponible (optionnel)"
-            temp_manager=""
-        fi
-    else
-        log "Gestionnaire non téléchargé (wget non testé)"
-        temp_manager=""
-    fi
-    
-    # Vérification finale avant retour
-    if [[ ! -f "$temp_script" ]]; then
-        error "ERREUR CRITIQUE: Fichier générateur perdu"
-        rm -rf "$temp_dir"
-        exit 1
-    fi
-    
-    log "Fichiers prêts dans: $temp_dir"
-    echo "$temp_script|$temp_manager|$temp_dir"
-}
+# Configuration des alias
+echo "Configuration des alias..."
 
-# Installer les scripts
-install_scripts() {
-    local files_info="$1"
-    local temp_script=$(echo "$files_info" | cut -d'|' -f1)
-    local temp_manager=$(echo "$files_info" | cut -d'|' -f2)
-    
-    local target_script="$INSTALL_DIR/$ALIAS_NAME"
-    local target_manager="$INSTALL_DIR/mkf-manager"
-    
-    log "Installation depuis fichiers temporaires:"
-    log "  Source générateur: $temp_script"
-    log "  Cible générateur: $target_script"
-    
-    # Triple vérification que le générateur existe et est accessible
-    if [[ ! -f "$temp_script" ]]; then
-        error "ERREUR CRITIQUE: Fichier générateur introuvable"
-        error "Fichier attendu: $temp_script"
-        error "Listing /tmp/mkf_*:"
-        ls -la /tmp/mkf_* 2>/dev/null || echo "Aucun fichier mkf trouvé"
-        exit 1
-    fi
-    
-    if [[ ! -r "$temp_script" ]]; then
-        error "ERREUR CRITIQUE: Fichier générateur non lisible"
-        error "Permissions: $(ls -la "$temp_script" 2>/dev/null || echo "impossible à lister")"
-        exit 1
-    fi
-    
-    if [[ ! -s "$temp_script" ]]; then
-        error "ERREUR CRITIQUE: Fichier générateur vide"
-        error "Taille: $(wc -c < "$temp_script" 2>/dev/null || echo "0") bytes"
-        exit 1
-    fi
-    
-    log "Vérifications OK - Début de l'installation"
-    
-    # Demander confirmation si déjà installé
-    if [[ -f "$target_script" ]]; then
-        warning "MKF est déjà installé: $target_script"
-        if [[ "${FORCE_INSTALL:-}" != "true" ]]; then
-            read -p "Remplacer l'installation existante ? (y/N): " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                log "Installation annulée par l'utilisateur"
-                rm -f "$temp_script" "$temp_manager"
-                exit 0
-            fi
-        fi
-        
-        # Backup de l'ancienne version
-        local backup_path="$target_script.backup.$(date +%s)"
-        if cp "$target_script" "$backup_path"; then
-            success "Backup créé: $backup_path"
-        else
-            warning "Impossible de créer un backup (non critique)"
-        fi
-    fi
-    
-    # Installer le générateur principal
-    log "Copie: $temp_script -> $target_script"
-    
-    if [[ "$INSTALL_TYPE" == "system" ]]; then
-        if ! sudo cp "$temp_script" "$target_script"; then
-            error "Échec de la copie système du générateur"
-            error "Source: $temp_script"
-            error "Cible: $target_script"
-            rm -f "$temp_script" "$temp_manager"
-            exit 1
-        fi
-        
-        if ! sudo chmod +x "$target_script"; then
-            error "Échec de l'attribution des permissions (système)"
-            rm -f "$temp_script" "$temp_manager"
-            exit 1
-        fi
-    else
-        if ! cp "$temp_script" "$target_script"; then
-            error "Échec de la copie utilisateur du générateur"
-            error "Source: $temp_script"
-            error "Cible: $target_script"
-            error "Permissions source: $(ls -la "$temp_script" 2>/dev/null)"
-            error "Permissions dossier cible: $(ls -lad "$INSTALL_DIR" 2>/dev/null)"
-            rm -f "$temp_script" "$temp_manager"
-            exit 1
-        fi
-        
-        if ! chmod +x "$target_script"; then
-            error "Échec de l'attribution des permissions (utilisateur)"
-            rm -f "$temp_script" "$temp_manager"
-            exit 1
-        fi
-    fi
-    
-    success "Générateur installé: $target_script"
-    
-    # Installer le gestionnaire si disponible
-    if [[ -n "$temp_manager" ]] && [[ -f "$temp_manager" ]]; then
-        log "Installation du gestionnaire: $temp_manager -> $target_manager"
-        
-        # Backup si existe déjà
-        if [[ -f "$target_manager" ]]; then
-            local manager_backup="$target_manager.backup.$(date +%s)"
-            cp "$target_manager" "$manager_backup" 2>/dev/null && log "Backup gestionnaire: $manager_backup"
-        fi
-        
-        # Installation du gestionnaire
-        if [[ "$INSTALL_TYPE" == "system" ]]; then
-            if sudo cp "$temp_manager" "$target_manager" && sudo chmod +x "$target_manager"; then
-                success "Gestionnaire installé: $target_manager"
-            else
-                warning "Échec de l'installation du gestionnaire (non critique)"
-            fi
-        else
-            if cp "$temp_manager" "$target_manager" && chmod +x "$target_manager"; then
-                success "Gestionnaire installé: $target_manager"
-            else
-                warning "Échec de l'installation du gestionnaire (non critique)"
-            fi
-        fi
-    else
-        log "Gestionnaire non disponible - installation du générateur seulement"
-    fi
-    
-    # Vérification post-installation
-    if [[ ! -x "$target_script" ]]; then
-        error "ERREUR: Le générateur installé n'est pas exécutable"
-        error "Fichier: $target_script"
-        error "Permissions: $(ls -la "$target_script" 2>/dev/null || echo "impossible à lister")"
-        rm -f "$temp_script" "$temp_manager"
-        exit 1
-    fi
-    
-    # Test rapide d'exécution
-    if ! "$target_script" --version >/dev/null 2>&1; then
-        warning "Le générateur installé ne répond pas à --version (peut être normal)"
-    else
-        success "Générateur fonctionnel"
-    fi
-    
-    # Nettoyage des fichiers temporaires
-    rm -f "$temp_script" "$temp_manager"
-    log "Fichiers temporaires nettoyés"
-}
+SHELL_FILES=()
+[[ -f "$HOME/.bashrc" ]] && SHELL_FILES+=("$HOME/.bashrc")
+[[ -f "$HOME/.zshrc" ]] && SHELL_FILES+=("$HOME/.zshrc")
 
-# Configurer les alias shell
-setup_shell() {
-    log "Configuration des alias shell..."
-    
-    # Fichiers de configuration shell à modifier
-    local shell_files=()
-    [[ -f "$HOME/.bashrc" ]] && shell_files+=("$HOME/.bashrc")
-    [[ -f "$HOME/.zshrc" ]] && shell_files+=("$HOME/.zshrc")
-    [[ -f "$HOME/.profile" ]] && shell_files+=("$HOME/.profile")
-    
-    if [[ ${#shell_files[@]} -eq 0 ]]; then
-        warning "Aucun fichier de configuration shell trouvé"
-        return
-    fi
-    
-    # Ajouter ~/bin au PATH si nécessaire (pour installation user)
-    if [[ "$INSTALL_TYPE" == "user" ]]; then
-        for shell_file in "${shell_files[@]}"; do
+if [[ ${#SHELL_FILES[@]} -gt 0 ]]; then
+    # Ajouter ~/bin au PATH si nécessaire
+    if [[ "$INSTALL_DIR" == "$HOME/bin" ]]; then
+        for shell_file in "${SHELL_FILES[@]}"; do
             if ! grep -q 'export PATH="$HOME/bin:$PATH"' "$shell_file" 2>/dev/null; then
                 echo "" >> "$shell_file"
-                echo "# Ajouté par MKF installer $(date)" >> "$shell_file"
+                echo "# MKF PATH" >> "$shell_file"
                 echo 'export PATH="$HOME/bin:$PATH"' >> "$shell_file"
-                success "PATH mis à jour dans $(basename "$shell_file")"
+                echo "✅ PATH mis à jour dans $(basename "$shell_file")"
             fi
         done
     fi
     
     # Ajouter les alias
-    local aliases=(
-        "alias $ALIAS_NAME='$INSTALL_DIR/$ALIAS_NAME'"
-        "alias mkf-help='$ALIAS_NAME --help'"
-        "alias mkf-config='$ALIAS_NAME --config'"
-        "alias mkf-version='$ALIAS_NAME --version'"
-    )
-    
-    # Ajouter l'alias du gestionnaire si installé
-    if [[ -f "$INSTALL_DIR/mkf-manager" ]]; then
-        aliases+=("alias mkf-manager='$INSTALL_DIR/mkf-manager'")
-    fi
-    
-    for shell_file in "${shell_files[@]}"; do
-        # Vérifier si les alias existent déjà
+    for shell_file in "${SHELL_FILES[@]}"; do
         if ! grep -q "alias $ALIAS_NAME=" "$shell_file" 2>/dev/null; then
             echo "" >> "$shell_file"
-            echo "# Alias MKF - Ajoutés par l'installer $(date)" >> "$shell_file"
-            for alias_cmd in "${aliases[@]}"; do
-                echo "$alias_cmd" >> "$shell_file"
-            done
-            success "Alias ajoutés dans $(basename "$shell_file")"
+            echo "# Alias MKF" >> "$shell_file"
+            echo "alias $ALIAS_NAME='$TARGET_SCRIPT'" >> "$shell_file"
+            echo "alias mkf-help='$ALIAS_NAME --help'" >> "$shell_file"
+            [[ -f "$TARGET_MANAGER" ]] && echo "alias mkf-manager='$TARGET_MANAGER'" >> "$shell_file"
+            echo "✅ Alias ajoutés dans $(basename "$shell_file")"
         fi
     done
-    
-    # Activer les alias pour cette session
-    for alias_cmd in "${aliases[@]}"; do
-        eval "$alias_cmd"
-    done
-}
+fi
 
-# Créer la configuration initiale
-setup_config() {
-    log "Configuration initiale..."
-    
-    local config_dir="$HOME/.config/mkf"
-    local config_file="$config_dir/config"
-    
-    mkdir -p "$config_dir"
-    
-    if [[ ! -f "$config_file" ]]; then
-        cat > "$config_file" << EOF
-# Configuration MKF v$VERSION - Générée automatiquement
+# Configuration initiale
+CONFIG_DIR="$HOME/.config/mkf"
+CONFIG_FILE="$CONFIG_DIR/config"
 
-# Plugins activés par défaut
+mkdir -p "$CONFIG_DIR"
+
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    cat > "$CONFIG_FILE" << 'EOF'
+# Configuration MKF
 RECURSIVE_SEARCH=true
 AUTO_LIBRARIES=true
 AUTO_GITIGNORE=false
 PERFORMANCE_ANALYSIS=true
-
-# Paramètres de compilation
 DEFAULT_CC="c++"
 DEFAULT_CFLAGS="-std=c++98 -Wall -Wextra -Werror -g"
-
-# Style
 MAKEFILE_STYLE="classic"
 FALLBACK_EMOJI="🚀"
-
-# Meta
-INSTALL_DATE="$(date)"
-INSTALL_TYPE="$INSTALL_TYPE"
-INSTALL_SOURCE="one-liner"
-REPO_URL="$REPO_URL"
 EOF
-        success "Configuration créée: $config_file"
-    else
-        success "Configuration existante conservée"
-    fi
-}
+    echo "✅ Configuration créée: $CONFIG_FILE"
+fi
 
 # Test de l'installation
-test_installation() {
-    log "Test de l'installation..."
-    
-    # Test 1: Commande disponible
-    if command -v "$ALIAS_NAME" >/dev/null 2>&1; then
-        success "Commande '$ALIAS_NAME' disponible"
-    else
-        warning "Commande '$ALIAS_NAME' pas encore disponible (redémarre ton terminal)"
-    fi
-    
-    # Test 2: Exécution
-    local target_path="$INSTALL_DIR/$ALIAS_NAME"
-    if [[ -x "$target_path" ]]; then
-        local version_output="$($target_path --version 2>/dev/null || echo "")"
-        if [[ -n "$version_output" ]]; then
-            success "Version: $version_output"
-        else
-            warning "Impossible d'obtenir la version"
-        fi
-    fi
-    
-    # Test 3: Configuration
-    if [[ -f "$HOME/.config/mkf/config" ]]; then
-        success "Configuration trouvée"
-    else
-        warning "Configuration manquante"
-    fi
-    
-    # Test 4: Gestionnaire
-    if [[ -f "$INSTALL_DIR/mkf-manager" ]]; then
-        success "Gestionnaire installé"
-    else
-        warning "Gestionnaire non installé"
-    fi
-}
+echo "Test de l'installation..."
 
-# Afficher le résumé final
-show_summary() {
-    echo ""
-    echo -e "${GREEN}${BOLD}"
-    cat << "EOF"
-    ╔══════════════════════════════════════════════════════════════╗
-    ║                                                              ║
-    ║                 🎉 INSTALLATION RÉUSSIE! 🎉                  ║
-    ║                                                              ║
-    ║              MKF est maintenant disponible                   ║
-    ║                                                              ║
-    ╚══════════════════════════════════════════════════════════════╝
-EOF
-    echo -e "${NC}"
-    
-    echo -e "${CYAN}${BOLD}🚀 UTILISATION:${NC}"
-    echo ""
-    echo -e "  ${YELLOW}$ALIAS_NAME MonProjet${NC}         # Créer un Makefile automatiquement"
-    echo -e "  ${YELLOW}$ALIAS_NAME -i Calculator${NC}     # Mode interactif"
-    echo -e "  ${YELLOW}$ALIAS_NAME --config${NC}          # Configuration des plugins"
-    echo -e "  ${YELLOW}$ALIAS_NAME --help${NC}            # Aide complète"
-    echo ""
-    
-    if [[ -f "$INSTALL_DIR/mkf-manager" ]]; then
-        echo -e "${PURPLE}${BOLD}⚙️ GESTIONNAIRE:${NC}"
-        echo ""
-        echo -e "  ${YELLOW}mkf-manager${NC}                # Interface de gestion complète"
-        echo -e "  ${YELLOW}mkf-manager uninstall${NC}      # Désinstaller MKF"
-        echo -e "  ${YELLOW}mkf-manager plugins${NC}        # Gérer les plugins"
-        echo ""
-    fi
-    
-    echo -e "${BLUE}${BOLD}📚 EXEMPLES:${NC}"
-    echo ""
-    echo -e "  ${CYAN}# Dans un nouveau projet${NC}"
-    echo -e "  mkdir MonProjet && cd MonProjet"
-    echo -e "  $ALIAS_NAME MonProjet"
-    echo ""
-    echo -e "  ${CYAN}# Projet avec emoji spécifique${NC}"
-    echo -e "  $ALIAS_NAME WebServer 🌐"
-    echo ""
-    
-    if [[ "$INSTALL_TYPE" == "user" ]]; then
-        echo -e "${YELLOW}${BOLD}🔄 ACTIVATION:${NC}"
-        echo ""
-        echo "Pour utiliser immédiatement dans ce terminal:"
-        echo -e "  ${BLUE}source ~/.bashrc${NC} (ou ~/.zshrc selon ton shell)"
-        echo ""
-        echo "Ou ouvre un nouveau terminal pour que les alias soient actifs."
-        echo ""
-    fi
-    
-    echo -e "${PURPLE}Repository: ${UNDERLINE}$REPO_URL${NC}"
-    echo -e "${DIM}Merci d'utiliser MKF! 🚀${NC}"
-}
+if [[ -x "$TARGET_SCRIPT" ]]; then
+    echo -e "${GREEN}✅ Installation réussie!${NC}"
+else
+    echo -e "${RED}❌ Problème d'installation${NC}"
+    exit 1
+fi
 
-# ═══════════════════════════════════════════════════════════════
-# 🎯 MAIN FUNCTION
-# ═══════════════════════════════════════════════════════════════
+# Nettoyage
+rm -f "$TEMP_SCRIPT" "$TEMP_MANAGER"
 
-main() {
-    # Options de ligne de commande
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --silent)
-                SILENT=true
-                FORCE_INSTALL=true
-                shift
-                ;;
-            --no-colors)
-                # Forcer la désactivation des couleurs
-                RED='' GREEN='' YELLOW='' BLUE='' PURPLE='' CYAN=''
-                BOLD='' DIM='' UNDERLINE='' NC=''
-                shift
-                ;;
-            --force)
-                FORCE_INSTALL=true
-                shift
-                ;;
-            --help|-h)
-                echo "Installation MKF - Options disponibles:"
-                echo "  --silent     Installation silencieuse"
-                echo "  --no-colors  Désactiver les couleurs"
-                echo "  --force      Forcer l'installation sans confirmation"
-                exit 0
-                ;;
-            *)
-                echo "Option inconnue: $1"
-                echo "Utilise --help pour voir les options disponibles"
-                exit 1
-                ;;
-        esac
-    done
-    
-    # Mode silencieux pour automatisation
-    if [[ "${SILENT_INSTALL:-}" == "true" ]]; then
-        SILENT=true
-        FORCE_INSTALL=true
-    fi
-    
-    # Définir les valeurs par défaut si pas déjà définies
-    SILENT="${SILENT:-false}"
-    
-    if [[ "$SILENT" != "true" ]]; then
-        show_banner
-    fi
-    
-    # Vérifications préalables
-    check_requirements
-    detect_system
-    
-    # Téléchargement et installation
-    local files_info
-    files_info=$(download_scripts)
-    install_scripts "$files_info"
-    
-    # Configuration
-    setup_shell
-    setup_config
-    
-    # Tests
-    test_installation
-    
-    # Résumé
-    if [[ "$SILENT" != "true" ]]; then
-        show_summary
-    else
-        success "MKF installé avec succès!"
-    fi
-}
-
-# Gestion d'erreur globale
-trap 'error "Installation interrompue"; exit 1' INT TERM
-
-# Point d'entrée
-main "$@"
+echo ""
+echo -e "${BLUE}${BOLD}🎉 Installation terminée!${NC}"
+echo ""
+echo -e "${YELLOW}Utilisation:${NC}"
+echo "  $ALIAS_NAME MonProjet    # Générer un Makefile"
+echo "  $ALIAS_NAME -i Calculator # Mode interactif"
+echo "  $ALIAS_NAME --help       # Aide"
+[[ -f "$TARGET_MANAGER" ]] && echo "  mkf-manager             # Gestionnaire"
+echo ""
+echo -e "${YELLOW}⚠️  Redémarre ton terminal ou exécute:${NC}"
+echo "  source ~/.bashrc  (ou ~/.zshrc)"
+echo ""
+echo -e "${GREEN}🚀 Prêt à générer des Makefiles!${NC}"
