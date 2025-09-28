@@ -228,58 +228,92 @@ install_scripts() {
     local files_info="$1"
     local temp_script=$(echo "$files_info" | cut -d'|' -f1)
     local temp_manager=$(echo "$files_info" | cut -d'|' -f2)
-    local temp_dir=$(echo "$files_info" | cut -d'|' -f3)
     
     local target_script="$INSTALL_DIR/$ALIAS_NAME"
     local target_manager="$INSTALL_DIR/mkf-manager"
     
-    log "Installation depuis: $temp_dir"
+    log "Installation depuis fichiers temporaires:"
+    log "  Source générateur: $temp_script"
+    log "  Cible générateur: $target_script"
     
-    # Double vérification que le générateur existe
+    # Triple vérification que le générateur existe et est accessible
     if [[ ! -f "$temp_script" ]]; then
         error "ERREUR CRITIQUE: Fichier générateur introuvable"
-        error "Attendu: $temp_script"
-        error "Contenu du dossier temporaire:"
-        ls -la "$temp_dir" 2>/dev/null || echo "Dossier inexistant"
-        rm -rf "$temp_dir"
+        error "Fichier attendu: $temp_script"
+        error "Listing /tmp/mkf_*:"
+        ls -la /tmp/mkf_* 2>/dev/null || echo "Aucun fichier mkf trouvé"
         exit 1
     fi
     
-    log "Installation du générateur: $temp_script -> $target_script"
+    if [[ ! -r "$temp_script" ]]; then
+        error "ERREUR CRITIQUE: Fichier générateur non lisible"
+        error "Permissions: $(ls -la "$temp_script" 2>/dev/null || echo "impossible à lister")"
+        exit 1
+    fi
+    
+    if [[ ! -s "$temp_script" ]]; then
+        error "ERREUR CRITIQUE: Fichier générateur vide"
+        error "Taille: $(wc -c < "$temp_script" 2>/dev/null || echo "0") bytes"
+        exit 1
+    fi
+    
+    log "Vérifications OK - Début de l'installation"
     
     # Demander confirmation si déjà installé
     if [[ -f "$target_script" ]]; then
-        warning "MKF est déjà installé"
+        warning "MKF est déjà installé: $target_script"
         if [[ "${FORCE_INSTALL:-}" != "true" ]]; then
             read -p "Remplacer l'installation existante ? (y/N): " -n 1 -r
             echo
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                log "Installation annulée"
-                rm -rf "$temp_dir"
+                log "Installation annulée par l'utilisateur"
+                rm -f "$temp_script" "$temp_manager"
                 exit 0
             fi
         fi
         
         # Backup de l'ancienne version
-        cp "$target_script" "$target_script.backup.$(date +%s)"
-        success "Backup du générateur créé"
+        local backup_path="$target_script.backup.$(date +%s)"
+        if cp "$target_script" "$backup_path"; then
+            success "Backup créé: $backup_path"
+        else
+            warning "Impossible de créer un backup (non critique)"
+        fi
     fi
     
     # Installer le générateur principal
+    log "Copie: $temp_script -> $target_script"
+    
     if [[ "$INSTALL_TYPE" == "system" ]]; then
         if ! sudo cp "$temp_script" "$target_script"; then
-            error "Échec de l'installation système du générateur"
-            rm -rf "$temp_dir"
+            error "Échec de la copie système du générateur"
+            error "Source: $temp_script"
+            error "Cible: $target_script"
+            rm -f "$temp_script" "$temp_manager"
             exit 1
         fi
-        sudo chmod +x "$target_script"
+        
+        if ! sudo chmod +x "$target_script"; then
+            error "Échec de l'attribution des permissions (système)"
+            rm -f "$temp_script" "$temp_manager"
+            exit 1
+        fi
     else
         if ! cp "$temp_script" "$target_script"; then
-            error "Échec de l'installation utilisateur du générateur"
-            rm -rf "$temp_dir"
+            error "Échec de la copie utilisateur du générateur"
+            error "Source: $temp_script"
+            error "Cible: $target_script"
+            error "Permissions source: $(ls -la "$temp_script" 2>/dev/null)"
+            error "Permissions dossier cible: $(ls -lad "$INSTALL_DIR" 2>/dev/null)"
+            rm -f "$temp_script" "$temp_manager"
             exit 1
         fi
-        chmod +x "$target_script"
+        
+        if ! chmod +x "$target_script"; then
+            error "Échec de l'attribution des permissions (utilisateur)"
+            rm -f "$temp_script" "$temp_manager"
+            exit 1
+        fi
     fi
     
     success "Générateur installé: $target_script"
@@ -288,11 +322,13 @@ install_scripts() {
     if [[ -n "$temp_manager" ]] && [[ -f "$temp_manager" ]]; then
         log "Installation du gestionnaire: $temp_manager -> $target_manager"
         
+        # Backup si existe déjà
         if [[ -f "$target_manager" ]]; then
-            cp "$target_manager" "$target_manager.backup.$(date +%s)"
-            log "Backup du gestionnaire créé"
+            local manager_backup="$target_manager.backup.$(date +%s)"
+            cp "$target_manager" "$manager_backup" 2>/dev/null && log "Backup gestionnaire: $manager_backup"
         fi
         
+        # Installation du gestionnaire
         if [[ "$INSTALL_TYPE" == "system" ]]; then
             if sudo cp "$temp_manager" "$target_manager" && sudo chmod +x "$target_manager"; then
                 success "Gestionnaire installé: $target_manager"
@@ -307,19 +343,28 @@ install_scripts() {
             fi
         fi
     else
-        log "Gestionnaire non disponible, installation du générateur seulement"
+        log "Gestionnaire non disponible - installation du générateur seulement"
     fi
     
     # Vérification post-installation
     if [[ ! -x "$target_script" ]]; then
         error "ERREUR: Le générateur installé n'est pas exécutable"
-        rm -rf "$temp_dir"
+        error "Fichier: $target_script"
+        error "Permissions: $(ls -la "$target_script" 2>/dev/null || echo "impossible à lister")"
+        rm -f "$temp_script" "$temp_manager"
         exit 1
     fi
     
-    # Nettoyage du dossier temporaire
-    rm -rf "$temp_dir"
-    log "Dossier temporaire nettoyé"
+    # Test rapide d'exécution
+    if ! "$target_script" --version >/dev/null 2>&1; then
+        warning "Le générateur installé ne répond pas à --version (peut être normal)"
+    else
+        success "Générateur fonctionnel"
+    fi
+    
+    # Nettoyage des fichiers temporaires
+    rm -f "$temp_script" "$temp_manager"
+    log "Fichiers temporaires nettoyés"
 }
 
 # Configurer les alias shell
