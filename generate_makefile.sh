@@ -154,6 +154,36 @@ EOF
     fi
 }
 
+# Notification popup système
+show_popup_notification() {
+    if [[ ! -f "$UPDATE_CACHE_FILE.available" ]] || ! is_update_enabled; then
+        return
+    fi
+    
+    local latest_version=$(head -1 "$UPDATE_CACHE_FILE.available" 2>/dev/null)
+    local current_version=$(get_current_version)
+    
+    if [[ -n "$latest_version" ]]; then
+        local title="MKF - Mise à jour disponible"
+        local message="Nouvelle version $latest_version disponible (actuellement $current_version)"
+        
+        # Tentative de notification popup selon l'OS
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS - osascript
+            if command -v osascript >/dev/null 2>&1; then
+                osascript -e "display notification \"$message\" with title \"$title\"" 2>/dev/null &
+            fi
+        elif [[ "$OSTYPE" == "linux"* ]] || [[ "$OSTYPE" == "msys"* ]]; then
+            # Linux - notify-send
+            if command -v notify-send >/dev/null 2>&1; then
+                notify-send "$title" "$message" --icon=software-update-available 2>/dev/null &
+            elif command -v zenity >/dev/null 2>&1; then
+                zenity --info --title="$title" --text="$message" --timeout=5 2>/dev/null &
+            fi
+        fi
+    fi
+}
+
 # Afficher la notification de mise à jour (si nécessaire)
 show_update_notification() {
     if [[ ! -f "$UPDATE_CACHE_FILE.available" ]] || ! is_update_enabled; then
@@ -164,6 +194,10 @@ show_update_notification() {
     local current_version=$(get_current_version)
     
     if [[ -n "$latest_version" ]]; then
+        # Notification popup en arrière-plan
+        show_popup_notification
+        
+        # Notification console
         echo ""
         echo -e "${YELLOW}${BOLD}📢 Mise à jour disponible !${NC}"
         echo -e "  ${DIM}Version actuelle: ${NC}${BOLD}$current_version${NC}"
@@ -816,10 +850,118 @@ generate_makefile() {
     local project_emoji="$2"
     local src_files="$3"
     local libraries="$4"
+    local stealth="${5:-false}"
     
     local banner=$(generate_ascii_banner "$project_name")
     
-    cat > Makefile << EOF
+    if [[ "$stealth" == "true" ]]; then
+        # Mode discret - Conserve bannière et messages mais supprime les signatures MKF
+        cat > Makefile << EOF
+BANNER := "$banner"
+
+PROJECT = $project_name
+NAME = $project_name
+PROJET_EMOJI = $project_emoji
+CC = \$(SILENT)$DEFAULT_CC \$(CFLAGS)
+CFLAGS = $DEFAULT_CFLAGS
+
+HSRCS = src
+SRC_DIR = src
+OBJ_DIR = obj
+
+SRC = $src_files
+LIBS = $libraries
+
+OBJS = \$(patsubst %.cpp,\$(OBJ_DIR)/%.o,\$(SRC))
+
+DELET_LINE = \$(SILENT) echo -ne "\\033[2K";
+RM = \$(SILENT) rm -rf
+
+SILENT = @
+COLOUR_GREEN = \\033[0;32m
+COLOUR_RED = \\033[0;31m
+COLOUR_PURPLE = \\033[38;5;197m
+COLOUR_BLUE = \\033[0;34m
+COLOUR_YELLOW = \\033[0;33m
+COLOUR_CYAN = \\033[0;36m
+NO_COLOR = \\033[m
+
+bold := \$(shell tput bold)
+notbold := \$(shell tput sgr0)
+
+PRINT = \$(SILENT) printf "\\r%b"
+
+MSG_CLEANING = "\$(COLOUR_RED)\$(bold)🧹 Nettoyage \$(notbold)\$(COLOUR_YELLOW)\$(PROJECT)\$(NO_COLOR)"
+MSG_CLEANED = "\$(COLOUR_RED)\$(bold)[🗑️ ] \$(PROJECT) \$(notbold)\$(COLOUR_YELLOW)nettoyé \$(NO_COLOR)\\n"
+MSG_TOTALLY_CLEANED = "\$(COLOUR_RED)\$(bold)[🗑️ ] \$(PROJECT) \$(notbold)\$(COLOUR_YELLOW)complètement nettoyé \$(NO_COLOR)\\n"
+MSG_COMPILING = "\$(COLOUR_YELLOW)\$(bold)[⚡ Compilation ⚡]\$(notbold)\$(COLOUR_CYAN) \$(^)\$(NO_COLOR)"
+MSG_LINKING = "\$(COLOUR_BLUE)\$(bold)[🔗 Linkage 🔗]\$(notbold)\$(COLOUR_CYAN) \$(NAME)\$(NO_COLOR)"
+MSG_READY = "\$(PROJET_EMOJI) \$(COLOUR_BLUE)\$(bold)\$(PROJECT) \$(COLOUR_GREEN)\$(bold)prêt!\$(NO_COLOR)\\n"
+
+HEADER = \$(SILENT) printf "\\n\$(COLOUR_PURPLE)"; printf \$(BANNER); printf "\$(NO_COLOR)\\n\\n"
+
+# Règle par défaut
+all: \$(NAME)
+
+# Compilation de l'exécutable
+\$(NAME): \$(OBJS)
+	\$(HEADER)
+	\$(DELET_LINE)
+	\$(PRINT) \$(MSG_LINKING)
+	\$(CC) \$^ \$(LIBS) -o \$@
+	\$(DELET_LINE)
+	\$(PRINT) \$(MSG_READY)
+
+# Compilation des fichiers objets
+\$(OBJ_DIR)/%.o: \$(SRC_DIR)/%.cpp
+	@mkdir -p \$(@D)
+	\$(DELET_LINE)
+	\$(PRINT) \$(MSG_COMPILING)
+	@\$(CC) \$(CFLAGS) -I \$(HSRCS) -o \$@ -c \$<
+
+# Nettoyage des objets
+clean:
+	\$(PRINT) \$(MSG_CLEANING)
+	\$(RM) \$(OBJ_DIR)
+	\$(DELET_LINE)
+	\$(PRINT) \$(MSG_CLEANED)
+
+# Nettoyage complet
+fclean: clean
+	\$(PRINT) \$(MSG_CLEANING)
+	\$(RM) \$(NAME)
+	\$(DELET_LINE)
+	\$(PRINT) \$(MSG_TOTALLY_CLEANED)
+
+# Recompilation complète
+re: fclean all
+
+# Installation (optionnel)
+install: \$(NAME)
+	@echo "Installation de \$(NAME) dans /usr/local/bin"
+	@sudo cp \$(NAME) /usr/local/bin/
+
+# Désinstallation
+uninstall:
+	@echo "Suppression de \$(NAME) de /usr/local/bin"
+	@sudo rm -f /usr/local/bin/\$(NAME)
+
+# Aide
+help:
+	@echo "Commandes disponibles:"
+	@echo "  make        - Compiler le projet"
+	@echo "  make clean  - Nettoyer les objets"
+	@echo "  make fclean - Nettoyage complet"
+	@echo "  make re     - Recompiler from scratch"
+	@echo "  make install- Installer globalement"
+	@echo "  make help   - Afficher cette aide"
+
+# Règles phony
+.PHONY: all clean fclean re install uninstall help
+EOF
+    else
+        # Mode normal avec signatures complètes
+        cat > Makefile << EOF
 # ╔══════════════════════════════════════════════════════════════╗
 # ║            🚀 MAKEFILE GÉNÉRÉ AUTOMATIQUEMENT 🚀             ║
 # ║                    Générateur MKF v$VERSION                    ║
@@ -928,6 +1070,74 @@ help:
 # Règles phony
 .PHONY: all clean fclean re install uninstall help
 EOF
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════
+# 👁️ MODE SURVEILLANCE
+# ═══════════════════════════════════════════════════════════════
+
+# Mode surveillance des fichiers
+start_watch_mode() {
+    local project_name="$1"
+    local project_emoji="$2"
+    local src_files="$3"
+    local libraries="$4"
+    local stealth_mode="$5"
+    
+    echo ""
+    echo -e "${CYAN}${BOLD}👁️ MODE SURVEILLANCE ACTIVÉ${NC}"
+    echo -e "${DIM}Surveillance des modifications des fichiers source...${NC}"
+    echo -e "${DIM}Appuyez sur Ctrl+C pour arrêter${NC}"
+    echo ""
+    
+    local last_modification=""
+    local watch_interval=2
+    
+    while true; do
+        # Calculer le hash des fichiers source pour détecter les changements
+        local current_modification=""
+        
+        # Surveiller les fichiers source existants
+        for file in $src_files; do
+            local filepath="src/$file"
+            if [[ -f "$filepath" ]]; then
+                local file_mod=$(stat -f "%m" "$filepath" 2>/dev/null || stat -c "%Y" "$filepath" 2>/dev/null || echo "0")
+                current_modification="$current_modification$file:$file_mod;"
+            fi
+        done
+        
+        # Surveiller les nouveaux fichiers dans src/
+        if [[ -d "src" ]]; then
+            local new_files=$(find src -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" 2>/dev/null | sort)
+            for new_file in $new_files; do
+                local basename_file=$(basename "$new_file")
+                if [[ ! " $src_files " =~ " $basename_file " ]]; then
+                    log_info "📄 Nouveau fichier détecté: $basename_file"
+                    src_files="$src_files $basename_file"
+                fi
+            done
+        fi
+        
+        # Si changement détecté, regénérer
+        if [[ "$current_modification" != "$last_modification" ]] && [[ -n "$last_modification" ]]; then
+            echo ""
+            log_info "🔄 Changement détecté, regénération du Makefile..."
+            
+            # Regénérer avec les mêmes paramètres
+            generate_makefile "$project_name" "$project_emoji" "$src_files" "$libraries" "$stealth_mode"
+            
+            # Analyse de performance
+            plugin_performance_analysis
+            
+            log_success "✅ Makefile mis à jour"
+            echo ""
+            echo -e "${DIM}Surveillance continue...${NC}"
+        fi
+        
+        last_modification="$current_modification"
+        sleep $watch_interval
+    done
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -945,6 +1155,7 @@ main() {
     local force_gitignore=false
     local cmake_mode=false
     local watch_mode=false
+    local stealth_mode=false
     
     # Parse des options
     while [[ $# -gt 0 ]]; do
@@ -992,6 +1203,41 @@ main() {
             --enable-update-check)
                 configure_updates "enable"
                 exit 0
+                ;;
+            --simulate-update)
+                # Fonction cachée pour tester les notifications
+                shift
+                local test_version="${1:-2.5.0}"
+                mkdir -p "$CONFIG_DIR"
+                echo -e "$test_version\n$(date +%s)" > "$UPDATE_CACHE_FILE.available"
+                echo "Simulation d'une mise à jour vers $test_version créée"
+                exit 0
+                ;;
+            --clear-simulation)
+                # Fonction cachée pour nettoyer les tests
+                rm -f "$UPDATE_CACHE_FILE.available"
+                echo "Simulation de mise à jour supprimée"
+                exit 0
+                ;;
+            --test-popup)
+                # Fonction cachée pour tester uniquement la popup
+                local title="MKF - Test de notification"
+                local message="Ceci est un test de notification popup"
+                if [[ "$OSTYPE" == "darwin"* ]] && command -v osascript >/dev/null 2>&1; then
+                    osascript -e "display notification \"$message\" with title \"$title\""
+                elif command -v notify-send >/dev/null 2>&1; then
+                    notify-send "$title" "$message" --icon=software-update-available
+                elif command -v zenity >/dev/null 2>&1; then
+                    zenity --info --title="$title" --text="$message" --timeout=5
+                else
+                    echo "Aucun système de notification popup disponible"
+                fi
+                exit 0
+                ;;
+            --42)
+                # Option ultra-cachée pour mode discret (masque uniquement les signatures du Makefile)
+                stealth_mode=true
+                shift
                 ;;
             -v|--version)
                 echo "MKF Makefile Generator v$VERSION"
@@ -1082,7 +1328,7 @@ main() {
     # Génération du Makefile
     echo ""
     log_info "⚡ Génération du Makefile..."
-    generate_makefile "$project_name" "$project_emoji" "$src_files" "$libraries"
+    generate_makefile "$project_name" "$project_emoji" "$src_files" "$libraries" "$stealth_mode"
     
     # Plugin .gitignore
     if [[ "$force_gitignore" == true ]] || [[ "$AUTO_GITIGNORE" == true ]]; then
@@ -1128,6 +1374,11 @@ EOF
     
     # Notification de mise à jour si disponible
     show_update_notification
+    
+    # Mode surveillance si activé
+    if [[ "$watch_mode" == "true" ]]; then
+        start_watch_mode "$project_name" "$project_emoji" "$src_files" "$libraries" "$stealth_mode"
+    fi
 }
 
 # Point d'entrée
