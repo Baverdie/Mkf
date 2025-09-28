@@ -7,7 +7,7 @@
 
 set -e
 
-VERSION="2.1.0"
+VERSION="2.2.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="$HOME/.config/mkf"
 CONFIG_FILE="$CONFIG_DIR/config"
@@ -80,7 +80,7 @@ get_latest_version() {
     
     # Fallback : chercher dans le script sur GitHub
     if [[ -z "$latest_version" ]] && command -v curl >/dev/null 2>&1; then
-        latest_version=$(curl -s "$REPO_RAW_URL/generate_makefile.sh" 2>/dev/null | grep '^VERSION=' | head -1 | sed 's/VERSION="2.1.0"]*\)"/\1/' 2>/dev/null)
+        latest_version=$(curl -s "$REPO_RAW_URL/generate_makefile.sh" 2>/dev/null | grep '^VERSION=' | head -1 | sed 's/VERSION="2.2.0"]*\)"/\1/' 2>/dev/null)
     fi
     
     echo "$latest_version"
@@ -384,7 +384,7 @@ MAKEFILE_STYLE="$MAKEFILE_STYLE"
 FALLBACK_EMOJI="$FALLBACK_EMOJI"
 
 # Méta
-CONFIG_VERSION="2.1.0"
+CONFIG_VERSION="2.2.0"
 LAST_UPDATE="$(date)"
 EOF
 }

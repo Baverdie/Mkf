@@ -14,6 +14,8 @@ curl -fsSL https://raw.githubusercontent.com/Baverdie/Mkf/main/install.sh | bash
 mkf MonProjet              # Génération automatique complète
 mkf -i Calculator          # Mode interactif pour choisir l'emoji
 mkf WebServer 🌐           # Avec emoji spécifique
+mkf --watch MyProject      # Mode surveillance avec auto-régénération
+mkf --42 Project           # Mode discret (sans signatures MKF)
 mkf --config              # Configuration des plugins
 mkf --help                # Aide complète
 ```
@@ -47,13 +49,16 @@ mkf-manager diagnostic    # Diagnostic et réparation système
 - **Barres de progression** colorées
 - **Messages d'erreur** informatifs
 - **Feedback visuel** en temps réel
+- **Messages Makefile** entièrement en anglais
+- **Notifications système** pour les mises à jour
 
 ### 🔌 Système de plugins modulaire
 - **Scan récursif** des sous-dossiers
 - **Génération .gitignore** automatique
 - **Analyse de performance** des Makefiles
-- **Mode surveillance** des fichiers
+- **Mode surveillance** des fichiers avec auto-régénération
 - **Support CMake** en alternative
+- **Notifications popup** pour les mises à jour disponibles
 - Configuration **activable/désactivable** individuellement
 
 ## 🎮 Exemples d'utilisation
@@ -79,6 +84,22 @@ mkf GameEngine
 mkf -i MyProject
 # → Interface interactive pour choisir parmi 12 catégories d'emojis
 # → Prévisualisation et confirmation avant génération
+```
+
+### Mode surveillance
+```bash
+mkf --watch GameEngine
+# → Surveillance en temps réel des fichiers source
+# → Auto-régénération du Makefile à chaque modification
+# → Messages de progression et détection des nouveaux fichiers
+```
+
+### Mode discret (sans signatures)
+```bash
+mkf --42 SecretProject
+# → Génère un Makefile sans en-têtes MKF
+# → Conserve toutes les fonctionnalités et messages colorés
+# → Idéal pour les projets où la discrétion est requise
 ```
 
 ## 🛠️ Installation avancée
@@ -173,7 +194,9 @@ Projet open source - voir le fichier LICENSE pour plus de détails.
 - [ ] Support pour d'autres langages (C, Rust, Go)
 - [ ] Templates de Makefile personnalisables
 - [ ] Intégration avec les IDE populaires
-- [ ] Mode watch avec auto-regénération
+- [x] Mode watch avec auto-regénération ✅
+- [x] Notifications popup pour mises à jour ✅
+- [x] Mode discret sans signatures ✅
 - [ ] Support des monorepos
 - [ ] Plugin pour détection des tests automatiques
 
